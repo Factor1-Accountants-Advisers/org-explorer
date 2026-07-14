@@ -11,10 +11,10 @@
       --border: #ebe4dc;
       --text: #1a2332;
       --muted: #6b7a90;
-      --accent: #e85d04;
-      --accent-hover: #c44d03;
-      --accent-soft: #fff4eb;
-      --line: #c9b8a8;
+      --accent: #e35205;
+      --accent-hover: #b01b1b;
+      --accent-soft: #fde8db;
+      --line: #c9956a;
       --shadow: 0 2px 8px rgba(26, 35, 50, 0.06);
       --shadow-hover: 0 8px 24px rgba(26, 35, 50, 0.1);
       --radius: 20px;
@@ -27,7 +27,7 @@
     body {
       font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
       background:
-        radial-gradient(1200px 600px at 50% -10%, #f7ebe0 0%, transparent 60%),
+        radial-gradient(1200px 600px at 50% -10%, #f5ddd0 0%, transparent 60%),
         var(--bg);
       color: var(--text);
       min-height: 100vh;
@@ -36,9 +36,10 @@
     }
 
     .app {
-      max-width: 820px;
+      max-width: 1400px;
+      width: 100%;
       margin: 0 auto;
-      padding: 1.35rem 1.25rem 2.5rem;
+      padding: 1.35rem 1.5rem 2rem;
     }
 
     header {
@@ -48,6 +49,19 @@
       gap: 1rem;
       margin-bottom: 1.1rem;
       flex-wrap: wrap;
+    }
+
+    .header-brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .header-logo {
+      width: 42px;
+      height: 42px;
+      object-fit: contain;
+      flex-shrink: 0;
     }
 
     header h1 {
@@ -115,8 +129,8 @@
     .toolbar input:focus,
     .toolbar select:focus {
       outline: none;
-      border-color: #f0a56e;
-      box-shadow: 0 0 0 3px rgba(232, 93, 4, 0.16);
+      border-color: #e35205;
+      box-shadow: 0 0 0 3px rgba(227, 82, 5, 0.18);
     }
 
     .toolbar select { cursor: pointer; }
@@ -196,7 +210,7 @@
     .path-spine button:hover {
       background: var(--accent-soft);
       text-decoration: none;
-      border-color: #f0c49a;
+      border-color: #e8a882;
     }
 
     .path-spine .current-crumb {
@@ -211,8 +225,10 @@
 
     .tree-viewport {
       position: relative;
-      min-height: 360px;
+      height: 540px;
+      min-height: 540px;
       padding: 0.25rem 0.5rem 0.5rem;
+      overflow: hidden;
     }
 
     .branch-svg {
@@ -265,9 +281,32 @@
       z-index: 1;
     }
 
-    .tree-row.manager-row { margin-bottom: 2.75rem; }
-    .tree-row.current-row { margin-bottom: 3.25rem; }
-    .tree-row.reports-row { gap: 1rem; }
+    .tree-row.manager-row { margin-bottom: 2.25rem; }
+    .tree-row.current-row { margin-bottom: 2.75rem; }
+
+    .reports-scroll {
+      width: 100%;
+      overflow-x: auto;
+      overflow-y: hidden;
+      padding-bottom: 0.35rem;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-color: #d4a07a transparent;
+    }
+
+    .reports-scroll::-webkit-scrollbar { height: 8px; }
+    .reports-scroll::-webkit-scrollbar-thumb {
+      background: #d4a07a;
+      border-radius: 999px;
+    }
+
+    .tree-row.reports-row {
+      flex-wrap: nowrap;
+      justify-content: flex-start;
+      width: max-content;
+      min-width: 100%;
+      gap: 1rem;
+      padding: 0 0.25rem;
+    }
 
     .tree-node {
       display: flex;
@@ -309,9 +348,9 @@
     }
 
     .tree-node.current .node-card {
-      border-color: #f0a56e;
-      background: linear-gradient(180deg, #fff8f2 0%, #ffefe3 100%);
-      box-shadow: 0 0 0 4px rgba(232, 93, 4, 0.14), var(--shadow);
+      border-color: #e35205;
+      background: linear-gradient(180deg, #fff8f2 0%, #fde8db 100%);
+      box-shadow: 0 0 0 4px rgba(227, 82, 5, 0.16), var(--shadow);
       padding: 1.15rem 1rem 1.1rem;
       cursor: default;
     }
@@ -387,8 +426,8 @@
     }
 
     .tree-node.current .node-dept {
-      background: #ffe3cc;
-      color: #9a3f02;
+      background: #fad4bc;
+      color: #8c1515;
     }
 
     .node-hint {
@@ -441,8 +480,8 @@
     }
 
     .demo-banner {
-      background: #fff4eb;
-      border: 1px solid #f5c89a;
+      background: #fde8db;
+      border: 1px solid #e8a882;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -450,7 +489,7 @@
       flex-wrap: wrap;
     }
 
-    .demo-banner strong { color: #c44d03; }
+    .demo-banner strong { color: #b01b1b; }
     .hidden { display: none !important; }
 
     @media (max-width: 640px) {
@@ -467,7 +506,10 @@
 <body>
   <div class="app">
     <header>
-      <h1>Org Explorer</h1>
+      <div class="header-brand">
+        <img src="logo.webp" alt="Factor1" class="header-logo" width="42" height="42" />
+        <h1>Org Explorer</h1>
+      </div>
       <div class="header-actions">
         <button id="btn-home" class="hidden" type="button">My profile</button>
         <button id="btn-signout" class="hidden" type="button">Sign out</button>
@@ -611,6 +653,7 @@
     let drawFrame = 0;
     const photoCache = new Map();
     const userCache = new Map();
+    const directReportCountCache = new Map();
 
     const els = {
       status: document.getElementById("status"),
@@ -775,15 +818,46 @@
 
     async function fetchDirectReports(userId) {
       if (demoMode) {
-        return Object.values(DEMO_USERS)
+        return sortPeople(Object.values(DEMO_USERS)
           .filter((u) => u.managerId === userId)
-          .map(stripInternal);
+          .map(stripInternal));
       }
       const base = userId === "me" ? "/me" : `/users/${userId}`;
       const data = await graphGet(`${base}/directReports?$select=${REPORT_SELECT}&$top=100`);
       const reports = (data?.value || []).filter((u) => u.id);
       reports.forEach(cacheUser);
-      return reports;
+      return sortPeople(reports);
+    }
+
+    async function countDirectReports(userId) {
+      if (directReportCountCache.has(userId)) return directReportCountCache.get(userId);
+      if (demoMode) {
+        const count = Object.values(DEMO_USERS).filter((u) => u.managerId === userId).length;
+        directReportCountCache.set(userId, count);
+        return count;
+      }
+      const base = userId === "me" ? "/me" : `/users/${userId}`;
+      try {
+        const data = await graphGet(`${base}/directReports?$select=id&$top=999`);
+        const count = (data?.value || []).filter((u) => u.id).length;
+        directReportCountCache.set(userId, count);
+        return count;
+      } catch {
+        return 0;
+      }
+    }
+
+    function sortPeople(users) {
+      return [...users].sort((a, b) => {
+        const deptA = (a.department || "").trim().toLowerCase();
+        const deptB = (b.department || "").trim().toLowerCase();
+        if (deptA !== deptB) {
+          if (!deptA) return 1;
+          if (!deptB) return -1;
+          return deptA.localeCompare(deptB);
+        }
+        return (a.displayName || "").localeCompare(b.displayName || "", undefined, { sensitivity: "base" });
+      });
     }
 
     async function graphGet(path) {
@@ -902,14 +976,15 @@
       refreshDeptDropdown();
     }
 
-    async function nodeHtml(user, role) {
+    async function nodeHtml(user, role, reportCount = 0) {
       const photo = await fetchPhotoUrl(user.id);
       const avatar = photo
         ? `<img class="avatar" src="${photo}" alt="" />`
         : `<div class="avatar">${escapeHtml(initials(user))}</div>`;
       const dept = user.department?.trim();
       const hint = role === "manager" ? "↑ Go up"
-        : role === "report" ? "↓ Explore"
+        : role === "report" && reportCount > 0
+          ? `${reportCount} direct report${reportCount === 1 ? "" : "s"}`
         : "";
 
       const cardInner = `
@@ -950,6 +1025,13 @@
       };
     }
 
+    function topRowNodes(nodes) {
+      if (!nodes.length) return nodes;
+      const tops = nodes.map((n) => n.getBoundingClientRect().top);
+      const minTop = Math.min(...tops);
+      return nodes.filter((n, i) => Math.abs(tops[i] - minTop) <= 10);
+    }
+
     function drawBranchLines() {
       const viewport = els.treeViewport;
       const svg = els.branchSvg;
@@ -972,7 +1054,7 @@
       const paths = [];
       const managerNode = viewport.querySelector('[data-node-role="manager"]');
       const currentNode = viewport.querySelector('[data-node-role="current"]');
-      const reportNodes = [...viewport.querySelectorAll('[data-node-role="report"]')];
+      const reportNodes = topRowNodes([...viewport.querySelectorAll('[data-node-role="report"]')]);
 
       if (managerNode && currentNode) {
         const from = cardAnchor(managerNode, "bottom");
@@ -1037,6 +1119,7 @@
 
       let reports = await fetchDirectReports(current.id);
       reports = filterByDept(reports);
+      reports = sortPeople(reports);
 
       const parts = [];
 
@@ -1051,9 +1134,10 @@
       parts.push(`<div class="tree-row current-row">${await nodeHtml(current, "current")}</div>`);
 
       if (reports.length > 0) {
-        parts.push(`<div class="tree-row reports-row">${(await Promise.all(
-          reports.map((r) => nodeHtml(r, "report"))
-        )).join("")}</div>`);
+        const counts = await Promise.all(reports.map((r) => countDirectReports(r.id)));
+        parts.push(`<div class="reports-scroll"><div class="tree-row reports-row">${(await Promise.all(
+          reports.map((r, i) => nodeHtml(r, "report", counts[i]))
+        )).join("")}</div></div>`);
       } else {
         parts.push('<p class="empty-layer">No direct reports' +
           (departmentFilter ? " in this department" : "") + '</p>');
@@ -1089,6 +1173,9 @@
       renderPathSpine();
       refreshDeptDropdown();
       scheduleDrawLines();
+
+      const scrollEl = els.treeViewport.querySelector(".reports-scroll");
+      if (scrollEl) scrollEl.onscroll = () => scheduleDrawLines();
     }
 
     async function navigateUp(managerId) {
@@ -1153,6 +1240,7 @@
       searchTimer = setTimeout(async () => {
         let results = await graphSearch(query.trim());
         if (departmentFilter) results = filterByDept(results);
+        results = sortPeople(results);
         if (!results.length) {
           els.searchResults.innerHTML = `<div class="empty-layer" style="padding:0.75rem;max-width:none">No matches</div>`;
         } else {
