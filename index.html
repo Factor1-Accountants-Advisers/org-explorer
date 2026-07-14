@@ -584,6 +584,264 @@
       .tree-row.current-row { margin-bottom: 1.9rem; }
       .tree-row.reports-row { gap: 0.75rem; }
     }
+
+    /* ── Full tree view ─────────────────────────────────────────────────────── */
+    .full-tree-ui {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .ft-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .ft-toolbar-left,
+    .ft-toolbar-right {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .ft-mode-toggle {
+      display: inline-flex;
+      padding: 0.2rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-pill);
+      box-shadow: var(--shadow);
+    }
+
+    .ft-mode-toggle button {
+      border: none;
+      box-shadow: none;
+      padding: 0.4rem 0.9rem;
+      background: transparent;
+    }
+
+    .ft-mode-toggle button:hover:not(:disabled) {
+      background: var(--accent-soft);
+      box-shadow: none;
+    }
+
+    .ft-mode-toggle button.active {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .ft-hint {
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+
+    .ft-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 28px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      height: 760px;
+      min-height: 760px;
+      position: relative;
+    }
+
+    .ft-viewport {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      cursor: grab;
+      touch-action: none;
+      position: relative;
+      background:
+        radial-gradient(circle at 1px 1px, #e8e0d6 1px, transparent 0) 0 0 / 22px 22px;
+    }
+
+    .ft-viewport.is-dragging { cursor: grabbing; }
+
+    .ft-stage {
+      position: absolute;
+      left: 0;
+      top: 0;
+      transform-origin: 0 0;
+      will-change: transform;
+    }
+
+    .ft-svg {
+      position: absolute;
+      left: 0;
+      top: 0;
+      overflow: visible;
+      pointer-events: none;
+    }
+
+    .ft-svg path {
+      fill: none;
+      stroke: var(--line);
+      stroke-width: 1.75;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .ft-nodes {
+      position: absolute;
+      left: 0;
+      top: 0;
+    }
+
+    .ft-node {
+      position: absolute;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      pointer-events: none;
+      user-select: none;
+      box-shadow: var(--shadow);
+    }
+
+    .ft-node.ft-person {
+      width: 132px;
+      height: 78px;
+      padding: 0.45rem 0.4rem;
+      border: 1.5px solid var(--border);
+      border-radius: 14px;
+      background: linear-gradient(180deg, #ffffff 0%, #f7f9fc 100%);
+      gap: 0.15rem;
+    }
+
+    .ft-node.ft-person.is-me {
+      border-color: var(--accent);
+      background: linear-gradient(180deg, #fff8f2 0%, #fde8db 100%);
+      box-shadow: 0 0 0 3px rgba(227, 82, 5, 0.16), var(--shadow);
+    }
+
+    .ft-node .ft-avatar {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      object-fit: cover;
+      background: linear-gradient(145deg, #e8eef6, #d5deea);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.65rem;
+      font-weight: 650;
+      color: #5b6b82;
+      border: 2px solid #fff;
+      flex-shrink: 0;
+    }
+
+    .ft-node .ft-name {
+      font-size: 0.72rem;
+      font-weight: 650;
+      line-height: 1.15;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .ft-node .ft-title {
+      font-size: 0.62rem;
+      color: var(--muted);
+      line-height: 1.15;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .ft-node.ft-company,
+    .ft-node.ft-dept,
+    .ft-node.ft-job {
+      padding: 0.55rem 0.75rem;
+      border-radius: var(--radius-sm);
+      border: 1.5px solid var(--border);
+      gap: 0.12rem;
+    }
+
+    .ft-node.ft-company {
+      min-width: 160px;
+      background: #fff8f2;
+      border-color: #f0c49a;
+    }
+
+    .ft-node.ft-dept {
+      min-width: 140px;
+      background: #f7f9fc;
+    }
+
+    .ft-node.ft-job {
+      min-width: 148px;
+      background: #fff;
+    }
+
+    .ft-node .ft-label {
+      font-size: 0.78rem;
+      font-weight: 650;
+      line-height: 1.2;
+      max-width: 180px;
+    }
+
+    .ft-node .ft-count {
+      font-size: 0.68rem;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .ft-node.ft-company.company-factor1 {
+      background: #fad4bc;
+      border-color: #e8a882;
+      color: #8c1515;
+    }
+    .ft-node.ft-company.company-blue {
+      background: #d4e6f8;
+      border-color: #a8c8e8;
+      color: #1a4f8a;
+    }
+    .ft-node.ft-company.company-dark-green {
+      background: #c5dfc9;
+      border-color: #8fbf9a;
+      color: #1a4d28;
+    }
+    .ft-node.ft-company.company-light-green {
+      background: #e4f3d8;
+      border-color: #b5d99a;
+      color: #3d6b2e;
+    }
+    .ft-node.ft-company.company-purple {
+      background: #eadcf3;
+      border-color: #c9a8de;
+      color: #5a3d7a;
+    }
+    .ft-node.ft-company.company-teal { background: #d8f0ef; border-color: #9fd0cd; color: #0f5c5c; }
+    .ft-node.ft-company.company-slate { background: #e2e7ee; border-color: #b8c2d0; color: #3d4a5c; }
+    .ft-node.ft-company.company-rose { background: #f3dce6; border-color: #e0b0c4; color: #7a3050; }
+    .ft-node.ft-company.company-amber { background: #f5ebc8; border-color: #e0d090; color: #7a5a12; }
+    .ft-node.ft-company.company-cyan { background: #d5f0f7; border-color: #9fd5e5; color: #155e75; }
+
+    .ft-node.ft-focus {
+      box-shadow: 0 0 0 3px rgba(227, 82, 5, 0.2), var(--shadow);
+      border-color: var(--accent);
+    }
+
+    .ft-loading {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 255, 255, 0.72);
+      color: var(--muted);
+      font-size: 0.95rem;
+      z-index: 5;
+    }
   </style>
 </head>
 <body>
@@ -594,6 +852,7 @@
         <h1>Org Explorer</h1>
       </div>
       <div class="header-actions">
+        <button id="btn-full-tree" class="hidden" type="button">Full tree</button>
         <button id="btn-home" class="hidden" type="button">My profile</button>
         <button id="btn-signout" class="hidden" type="button">Sign out</button>
         <button id="btn-signin" class="primary" type="button">Sign in</button>
@@ -623,12 +882,39 @@
         </div>
       </div>
 
-      <div class="tree-panel">
-        <div class="branch-label">Current branch</div>
-        <nav id="path-spine" class="path-spine hidden" aria-label="Branch path"></nav>
-        <div class="tree-viewport" id="tree-viewport">
-          <svg class="branch-svg" id="branch-svg" aria-hidden="true"></svg>
-          <div id="tree-inner" class="tree-inner"></div>
+      <div id="branch-view">
+        <div class="tree-panel">
+          <div class="branch-label">Current branch</div>
+          <nav id="path-spine" class="path-spine hidden" aria-label="Branch path"></nav>
+          <div class="tree-viewport" id="tree-viewport">
+            <svg class="branch-svg" id="branch-svg" aria-hidden="true"></svg>
+            <div id="tree-inner" class="tree-inner"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="full-tree-ui" class="full-tree-ui hidden">
+        <div class="ft-toolbar">
+          <div class="ft-toolbar-left">
+            <button id="btn-ft-back" type="button">Back to explorer</button>
+            <div class="ft-mode-toggle" role="group" aria-label="Tree mode">
+              <button id="btn-ft-employees" type="button" class="active">Employees</button>
+              <button id="btn-ft-structure" type="button">Structure</button>
+            </div>
+          </div>
+          <div class="ft-toolbar-right">
+            <span class="ft-hint">Drag to pan · Scroll to zoom</span>
+            <button id="btn-ft-focus" type="button">Focus me</button>
+          </div>
+        </div>
+        <div class="ft-panel">
+          <div id="ft-loading" class="ft-loading hidden">Loading org…</div>
+          <div id="ft-viewport" class="ft-viewport">
+            <div id="ft-stage" class="ft-stage">
+              <svg id="ft-svg" class="ft-svg" aria-hidden="true"></svg>
+              <div id="ft-nodes" class="ft-nodes"></div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -758,10 +1044,37 @@
     const directReportCountCache = new Map();
     let orgRootsCache = null;
     let orgRootsPromise = null;
+    let fullOrgPeople = null;
+    let fullOrgManagerMap = null;
+    let fullOrgLoadPromise = null;
+    let ftMode = "employees"; // employees | structure
+    let ftPan = { x: 0, y: 0, scale: 1 };
+    let ftDragging = false;
+    let ftDragStart = null;
+    let ftFocusNodeId = null;
+    let ftLayoutBounds = { width: 0, height: 0 };
+    let ftPanZoomBound = false;
+
+    const FT = {
+      PERSON_W: 132,
+      PERSON_H: 78,
+      COMPANY_W: 170,
+      COMPANY_H: 56,
+      DEPT_W: 150,
+      DEPT_H: 50,
+      JOB_W: 158,
+      JOB_H: 50,
+      H_GAP: 18,
+      V_GAP: 88,
+      MIN_SCALE: 0.18,
+      MAX_SCALE: 2.4,
+    };
 
     const els = {
       status: document.getElementById("status"),
       mainUi: document.getElementById("main-ui"),
+      branchView: document.getElementById("branch-view"),
+      fullTreeUi: document.getElementById("full-tree-ui"),
       treeViewport: document.getElementById("tree-viewport"),
       treeInner: document.getElementById("tree-inner"),
       branchSvg: document.getElementById("branch-svg"),
@@ -774,6 +1087,16 @@
       btnSignIn: document.getElementById("btn-signin"),
       btnSignOut: document.getElementById("btn-signout"),
       btnHome: document.getElementById("btn-home"),
+      btnFullTree: document.getElementById("btn-full-tree"),
+      btnFtBack: document.getElementById("btn-ft-back"),
+      btnFtEmployees: document.getElementById("btn-ft-employees"),
+      btnFtStructure: document.getElementById("btn-ft-structure"),
+      btnFtFocus: document.getElementById("btn-ft-focus"),
+      ftViewport: document.getElementById("ft-viewport"),
+      ftStage: document.getElementById("ft-stage"),
+      ftSvg: document.getElementById("ft-svg"),
+      ftNodes: document.getElementById("ft-nodes"),
+      ftLoading: document.getElementById("ft-loading"),
       demoBanner: document.getElementById("demo-banner"),
       btnLive: document.getElementById("btn-live"),
     };
@@ -1579,6 +1902,511 @@
       }, 280);
     }
 
+    // ── Full tree view ──────────────────────────────────────────────────────────
+    function setFullTreeLoading(on, msg = "Loading org…") {
+      els.ftLoading.classList.toggle("hidden", !on);
+      if (on) els.ftLoading.textContent = msg;
+    }
+
+    function applyFtTransform() {
+      els.ftStage.style.transform =
+        `translate(${ftPan.x}px, ${ftPan.y}px) scale(${ftPan.scale})`;
+    }
+
+    function focusPersonId() {
+      return branchStack[branchStack.length - 1]?.id || myUserId;
+    }
+
+    async function loadFullOrg() {
+      if (fullOrgPeople) return fullOrgPeople;
+      if (fullOrgLoadPromise) return fullOrgLoadPromise;
+
+      fullOrgLoadPromise = (async () => {
+        const managerMap = new Map();
+        const byId = new Map();
+
+        if (demoMode) {
+          Object.values(DEMO_USERS).forEach((raw) => {
+            const user = stripInternal(raw);
+            byId.set(user.id, user);
+            managerMap.set(user.id, raw.managerId || null);
+            cacheUser(user);
+          });
+          fullOrgPeople = [...byId.values()];
+          fullOrgManagerMap = managerMap;
+          return fullOrgPeople;
+        }
+
+        const roots = await fetchOrgRoots();
+        const queue = roots.map((r) => ({ user: r, depth: 0 }));
+        roots.forEach((r) => {
+          byId.set(r.id, r);
+          managerMap.set(r.id, null);
+        });
+
+        let processed = 0;
+        while (queue.length) {
+          const batch = queue.splice(0, 12);
+          await Promise.all(batch.map(async ({ user, depth }) => {
+            if (depth >= 15) return;
+            processed += 1;
+            if (processed % 8 === 0) {
+              setFullTreeLoading(true, `Loading org… (${byId.size} people)`);
+            }
+            try {
+              const reports = await fetchDirectReports(user.id);
+              reports.forEach((rep) => {
+                if (byId.has(rep.id)) return;
+                byId.set(rep.id, rep);
+                managerMap.set(rep.id, user.id);
+                queue.push({ user: rep, depth: depth + 1 });
+              });
+            } catch { /* skip branch on error */ }
+          }));
+        }
+
+        fullOrgPeople = [...byId.values()];
+        fullOrgManagerMap = managerMap;
+        return fullOrgPeople;
+      })().finally(() => {
+        fullOrgLoadPromise = null;
+      });
+
+      return fullOrgLoadPromise;
+    }
+
+    function filteredFullOrgPeople() {
+      const people = fullOrgPeople || [];
+      if (!companyFilter && !departmentFilter) return people;
+      return people.filter(orgMatches);
+    }
+
+    function buildEmployeeForest(people, managerMap) {
+      const idSet = new Set(people.map((p) => p.id));
+      const children = new Map();
+      people.forEach((p) => children.set(p.id, []));
+
+      people.forEach((p) => {
+        const mid = managerMap.get(p.id);
+        if (mid && idSet.has(mid) && children.has(mid)) {
+          children.get(mid).push(p);
+        }
+      });
+
+      children.forEach((list, id) => {
+        children.set(id, sortPeople(list));
+      });
+
+      const roots = sortPeople(people.filter((p) => {
+        const mid = managerMap.get(p.id);
+        return !mid || !idSet.has(mid);
+      }));
+
+      function layoutNode(user) {
+        const kids = (children.get(user.id) || []).map(layoutNode);
+        const node = {
+          id: user.id,
+          kind: "person",
+          user,
+          children: kids,
+          width: FT.PERSON_W,
+          height: FT.PERSON_H,
+          x: 0,
+          y: 0,
+        };
+        if (!kids.length) {
+          node.subtreeWidth = FT.PERSON_W;
+        } else {
+          const kidsWidth = kids.reduce((s, k) => s + k.subtreeWidth, 0)
+            + FT.H_GAP * (kids.length - 1);
+          node.subtreeWidth = Math.max(FT.PERSON_W, kidsWidth);
+        }
+        return node;
+      }
+
+      function place(node, left, depth) {
+        node.y = depth * (FT.PERSON_H + FT.V_GAP);
+        if (!node.children.length) {
+          node.x = left + (node.subtreeWidth - node.width) / 2;
+          return;
+        }
+        let cursor = left + Math.max(0, (node.subtreeWidth - (
+          node.children.reduce((s, k) => s + k.subtreeWidth, 0)
+          + FT.H_GAP * (node.children.length - 1)
+        )) / 2);
+        node.children.forEach((child) => {
+          place(child, cursor, depth + 1);
+          cursor += child.subtreeWidth + FT.H_GAP;
+        });
+        const first = node.children[0];
+        const last = node.children[node.children.length - 1];
+        const mid = (first.x + first.width / 2 + last.x + last.width / 2) / 2;
+        node.x = mid - node.width / 2;
+      }
+
+      const forest = roots.map(layoutNode);
+      let left = 0;
+      forest.forEach((root) => {
+        place(root, left, 0);
+        left += root.subtreeWidth + FT.H_GAP * 2;
+      });
+      return forest;
+    }
+
+    function buildStructureForest(people) {
+      const companies = new Map();
+
+      people.forEach((p) => {
+        const company = (p.companyName || "").trim() || "Unassigned";
+        const dept = (p.department || "").trim() || "Unassigned";
+        const title = (p.jobTitle || "").trim() || "Unassigned";
+        if (!companies.has(company)) companies.set(company, new Map());
+        const depts = companies.get(company);
+        if (!depts.has(dept)) depts.set(dept, new Map());
+        const titles = depts.get(dept);
+        titles.set(title, (titles.get(title) || 0) + 1);
+      });
+
+      const companyNames = [...companies.keys()].sort((a, b) => a.localeCompare(b));
+
+      function layoutJob(title, count, company, dept) {
+        return {
+          id: `job:${company}|${dept}|${title}`,
+          kind: "job",
+          label: title,
+          count,
+          children: [],
+          width: FT.JOB_W,
+          height: FT.JOB_H,
+          subtreeWidth: FT.JOB_W,
+          x: 0,
+          y: 0,
+        };
+      }
+
+      function layoutDept(dept, titlesMap, company) {
+        const titles = [...titlesMap.entries()]
+          .sort((a, b) => a[0].localeCompare(b[0]))
+          .map(([title, count]) => layoutJob(title, count, company, dept));
+        const count = titles.reduce((s, t) => s + t.count, 0);
+        const kidsWidth = titles.reduce((s, t) => s + t.subtreeWidth, 0)
+          + FT.H_GAP * Math.max(0, titles.length - 1);
+        return {
+          id: `dept:${company}|${dept}`,
+          kind: "dept",
+          label: dept,
+          count,
+          children: titles,
+          width: FT.DEPT_W,
+          height: FT.DEPT_H,
+          subtreeWidth: Math.max(FT.DEPT_W, kidsWidth),
+          x: 0,
+          y: 0,
+        };
+      }
+
+      function layoutCompany(company, deptsMap) {
+        const deptNames = [...deptsMap.keys()].sort((a, b) => a.localeCompare(b));
+        const depts = deptNames.map((d) => layoutDept(d, deptsMap.get(d), company));
+        const count = depts.reduce((s, d) => s + d.count, 0);
+        const kidsWidth = depts.reduce((s, d) => s + d.subtreeWidth, 0)
+          + FT.H_GAP * Math.max(0, depts.length - 1);
+        return {
+          id: `company:${company}`,
+          kind: "company",
+          label: company,
+          count,
+          company,
+          children: depts,
+          width: FT.COMPANY_W,
+          height: FT.COMPANY_H,
+          subtreeWidth: Math.max(FT.COMPANY_W, kidsWidth),
+          x: 0,
+          y: 0,
+        };
+      }
+
+      function place(node, left, depth) {
+        const h = node.height;
+        node.y = depth * (Math.max(FT.COMPANY_H, FT.DEPT_H, FT.JOB_H) + FT.V_GAP);
+        if (!node.children.length) {
+          node.x = left + (node.subtreeWidth - node.width) / 2;
+          return;
+        }
+        const kidsSpan = node.children.reduce((s, k) => s + k.subtreeWidth, 0)
+          + FT.H_GAP * (node.children.length - 1);
+        let cursor = left + Math.max(0, (node.subtreeWidth - kidsSpan) / 2);
+        node.children.forEach((child) => {
+          place(child, cursor, depth + 1);
+          cursor += child.subtreeWidth + FT.H_GAP;
+        });
+        const first = node.children[0];
+        const last = node.children[node.children.length - 1];
+        const mid = (first.x + first.width / 2 + last.x + last.width / 2) / 2;
+        node.x = mid - node.width / 2;
+        void h;
+      }
+
+      const forest = companyNames.map((c) => layoutCompany(c, companies.get(c)));
+      let left = 0;
+      forest.forEach((root) => {
+        place(root, left, 0);
+        left += root.subtreeWidth + FT.H_GAP * 2;
+      });
+      return forest;
+    }
+
+    function flattenForest(forest) {
+      const nodes = [];
+      const edges = [];
+      function walk(node) {
+        nodes.push(node);
+        node.children.forEach((child) => {
+          edges.push({ from: node, to: child });
+          walk(child);
+        });
+      }
+      forest.forEach(walk);
+      return { nodes, edges };
+    }
+
+    function measureForest(nodes) {
+      let maxX = 0;
+      let maxY = 0;
+      nodes.forEach((n) => {
+        maxX = Math.max(maxX, n.x + n.width);
+        maxY = Math.max(maxY, n.y + n.height);
+      });
+      return { width: Math.max(maxX + 40, 400), height: Math.max(maxY + 40, 300) };
+    }
+
+    function ftPersonHtml(node, meId) {
+      const u = node.user;
+      const isMe = u.id === meId;
+      const photo = photoCache.get(u.id);
+      const avatar = photo
+        ? `<img class="ft-avatar" src="${photo}" alt="" />`
+        : `<div class="ft-avatar">${escapeHtml(initials(u))}</div>`;
+      return `<div class="ft-node ft-person${isMe ? " is-me" : ""}" data-ft-id="${escapeHtml(u.id)}" style="left:${node.x}px;top:${node.y}px;width:${node.width}px;height:${node.height}px">
+        ${avatar}
+        <span class="ft-name">${escapeHtml(u.displayName)}</span>
+        <span class="ft-title">${escapeHtml(u.jobTitle || "—")}</span>
+      </div>`;
+    }
+
+    function ftStructureHtml(node) {
+      const tone = node.kind === "company" ? companyBadgeClass(node.company || node.label) : "";
+      const focus = node.id === ftFocusNodeId ? " ft-focus" : "";
+      const countLabel = node.kind === "job"
+        ? `${escapeHtml(node.label)} · ${node.count}`
+        : escapeHtml(node.label);
+      const sub = node.kind === "job"
+        ? ""
+        : `<span class="ft-count">${node.count} people</span>`;
+      return `<div class="ft-node ft-${node.kind}${focus} ${tone}" data-ft-id="${escapeHtml(node.id)}" style="left:${node.x}px;top:${node.y}px;width:${node.width}px;min-height:${node.height}px">
+        <span class="ft-label">${countLabel}</span>
+        ${sub}
+      </div>`;
+    }
+
+    function drawFtEdges(edges, bounds) {
+      const svg = els.ftSvg;
+      svg.setAttribute("width", String(bounds.width));
+      svg.setAttribute("height", String(bounds.height));
+      svg.style.width = `${bounds.width}px`;
+      svg.style.height = `${bounds.height}px`;
+      const paths = edges.map(({ from, to }) => {
+        const x1 = from.x + from.width / 2;
+        const y1 = from.y + from.height;
+        const x2 = to.x + to.width / 2;
+        const y2 = to.y;
+        return `<path d="${curvePath(x1, y1, x2, y2)}"></path>`;
+      });
+      svg.innerHTML = paths.join("");
+    }
+
+    function centerOnNodeId(nodeId, nodes) {
+      const node = nodes.find((n) => n.id === nodeId)
+        || nodes.find((n) => n.user?.id === nodeId);
+      const vp = els.ftViewport.getBoundingClientRect();
+      if (!node) {
+        ftPan.scale = Math.min(1, Math.min(vp.width / (ftLayoutBounds.width || 1), vp.height / (ftLayoutBounds.height || 1)) * 0.9);
+        ftPan.x = (vp.width - ftLayoutBounds.width * ftPan.scale) / 2;
+        ftPan.y = 40;
+        applyFtTransform();
+        return;
+      }
+      const cx = node.x + node.width / 2;
+      const cy = node.y + node.height / 2;
+      const scale = Math.min(1.15, Math.max(0.45, Math.min(vp.width / 700, vp.height / 500)));
+      ftPan.scale = scale;
+      ftPan.x = vp.width / 2 - cx * scale;
+      ftPan.y = vp.height / 2 - cy * scale;
+      applyFtTransform();
+    }
+
+    function structureFocusIdForUser(user) {
+      if (!user) return null;
+      const company = (user.companyName || "").trim() || "Unassigned";
+      const dept = (user.department || "").trim() || "Unassigned";
+      const title = (user.jobTitle || "").trim() || "Unassigned";
+      return `job:${company}|${dept}|${title}`;
+    }
+
+    async function renderFullTree() {
+      const people = filteredFullOrgPeople();
+      const meId = focusPersonId();
+      const me = people.find((p) => p.id === meId) || userCache.get(meId) || branchStack[branchStack.length - 1];
+
+      if (!people.length) {
+        els.ftSvg.innerHTML = "";
+        els.ftNodes.innerHTML = `<div class="empty-layer" style="position:absolute;left:50%;top:40%;transform:translate(-50%,-50%);max-width:320px">No people match the current filters</div>`;
+        ftLayoutBounds = { width: 400, height: 300 };
+        ftPan = { x: 0, y: 0, scale: 1 };
+        applyFtTransform();
+        return;
+      }
+
+      let forest;
+      if (ftMode === "employees") {
+        forest = buildEmployeeForest(people, fullOrgManagerMap || new Map());
+        ftFocusNodeId = meId;
+      } else {
+        forest = buildStructureForest(people);
+        ftFocusNodeId = structureFocusIdForUser(me);
+      }
+
+      const { nodes, edges } = flattenForest(forest);
+      ftLayoutBounds = measureForest(nodes);
+      els.ftStage.style.width = `${ftLayoutBounds.width}px`;
+      els.ftStage.style.height = `${ftLayoutBounds.height}px`;
+      els.ftNodes.style.width = `${ftLayoutBounds.width}px`;
+      els.ftNodes.style.height = `${ftLayoutBounds.height}px`;
+
+      if (ftMode === "employees") {
+        els.ftNodes.innerHTML = nodes.map((n) => ftPersonHtml(n, meId)).join("");
+        hydrateFtPhotos(nodes);
+      } else {
+        els.ftNodes.innerHTML = nodes.map((n) => ftStructureHtml(n)).join("");
+      }
+
+      drawFtEdges(edges, ftLayoutBounds);
+      centerOnNodeId(ftFocusNodeId, nodes);
+    }
+
+    async function hydrateFtPhotos(nodes) {
+      const nearby = nodes.slice(0, 80);
+      await Promise.all(nearby.map(async (n) => {
+        try {
+          const url = await fetchPhotoUrl(n.user.id);
+          if (!url) return;
+          const host = els.ftNodes.querySelector(`[data-ft-id="${CSS.escape(n.user.id)}"]`);
+          if (!host) return;
+          const existing = host.querySelector(".ft-avatar");
+          if (!existing || existing.tagName === "IMG") return;
+          const img = document.createElement("img");
+          img.className = "ft-avatar";
+          img.src = url;
+          img.alt = "";
+          existing.replaceWith(img);
+        } catch { /* ignore */ }
+      }));
+    }
+
+    async function openFullTree() {
+      els.branchView.classList.add("hidden");
+      els.fullTreeUi.classList.remove("hidden");
+      els.btnFullTree.classList.add("hidden");
+      setFullTreeLoading(true);
+      try {
+        await loadFullOrg();
+        await renderFullTree();
+      } catch (err) {
+        setStatus(err.message || "Could not load full tree.", true);
+      } finally {
+        setFullTreeLoading(false);
+      }
+      bindFtPanZoom();
+    }
+
+    function closeFullTree() {
+      els.fullTreeUi.classList.add("hidden");
+      els.branchView.classList.remove("hidden");
+      els.btnFullTree.classList.remove("hidden");
+      scheduleDrawLines();
+    }
+
+    async function setFtMode(mode) {
+      if (ftMode === mode) return;
+      ftMode = mode;
+      els.btnFtEmployees.classList.toggle("active", mode === "employees");
+      els.btnFtStructure.classList.toggle("active", mode === "structure");
+      setFullTreeLoading(true, "Updating view…");
+      try {
+        await renderFullTree();
+      } finally {
+        setFullTreeLoading(false);
+      }
+    }
+
+    async function focusMeInFullTree() {
+      if (!fullOrgPeople) return;
+      await renderFullTree();
+    }
+
+    function bindFtPanZoom() {
+      if (ftPanZoomBound) return;
+      ftPanZoomBound = true;
+      const vp = els.ftViewport;
+
+      vp.addEventListener("pointerdown", (e) => {
+        if (e.button !== 0) return;
+        ftDragging = true;
+        ftDragStart = { x: e.clientX, y: e.clientY, panX: ftPan.x, panY: ftPan.y };
+        vp.classList.add("is-dragging");
+        vp.setPointerCapture(e.pointerId);
+      });
+
+      vp.addEventListener("pointermove", (e) => {
+        if (!ftDragging || !ftDragStart) return;
+        ftPan.x = ftDragStart.panX + (e.clientX - ftDragStart.x);
+        ftPan.y = ftDragStart.panY + (e.clientY - ftDragStart.y);
+        applyFtTransform();
+      });
+
+      const endDrag = (e) => {
+        if (!ftDragging) return;
+        ftDragging = false;
+        ftDragStart = null;
+        vp.classList.remove("is-dragging");
+        try { vp.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+      };
+      vp.addEventListener("pointerup", endDrag);
+      vp.addEventListener("pointercancel", endDrag);
+
+      vp.addEventListener("wheel", (e) => {
+        e.preventDefault();
+        const rect = vp.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+        const prev = ftPan.scale;
+        const delta = e.deltaY > 0 ? 0.9 : 1.1;
+        const next = Math.min(FT.MAX_SCALE, Math.max(FT.MIN_SCALE, prev * delta));
+        if (next === prev) return;
+        // Zoom toward cursor
+        const worldX = (mx - ftPan.x) / prev;
+        const worldY = (my - ftPan.y) / prev;
+        ftPan.scale = next;
+        ftPan.x = mx - worldX * next;
+        ftPan.y = my - worldY * next;
+        applyFtTransform();
+      }, { passive: false });
+    }
+
+    function showExplorerChrome() {
+      els.btnFullTree.classList.remove("hidden");
+    }
+
     // ── Boot ────────────────────────────────────────────────────────────────────
     async function startDemo() {
       demoMode = true;
@@ -1588,6 +2416,7 @@
       els.demoBanner.classList.remove("hidden");
       els.btnSignIn.classList.add("hidden");
       els.btnHome.classList.remove("hidden");
+      showExplorerChrome();
       setStatus("");
       els.mainUi.classList.remove("hidden");
       await renderTree();
@@ -1596,6 +2425,11 @@
     els.btnSignIn.addEventListener("click", signIn);
     els.btnSignOut.addEventListener("click", signOut);
     els.btnHome.addEventListener("click", goHome);
+    els.btnFullTree.addEventListener("click", () => openFullTree());
+    els.btnFtBack.addEventListener("click", () => closeFullTree());
+    els.btnFtEmployees.addEventListener("click", () => setFtMode("employees"));
+    els.btnFtStructure.addEventListener("click", () => setFtMode("structure"));
+    els.btnFtFocus.addEventListener("click", () => focusMeInFullTree());
     els.btnLive.addEventListener("click", async () => {
       try {
         await initAuth();
@@ -1617,16 +2451,21 @@
       companyFilter = e.target.value;
       refreshDeptDropdown();
       renderTree();
+      if (!els.fullTreeUi.classList.contains("hidden") && fullOrgPeople) renderFullTree();
       if (els.searchInput.value.trim()) runSearch(els.searchInput.value);
     });
 
     els.deptFilter.addEventListener("change", (e) => {
       departmentFilter = e.target.value;
       renderTree();
+      if (!els.fullTreeUi.classList.contains("hidden") && fullOrgPeople) renderFullTree();
       if (els.searchInput.value.trim()) runSearch(els.searchInput.value);
     });
 
-    window.addEventListener("resize", () => scheduleDrawLines());
+    window.addEventListener("resize", () => {
+      scheduleDrawLines();
+      if (!els.fullTreeUi.classList.contains("hidden")) applyFtTransform();
+    });
 
     (async function boot() {
       try {
@@ -1652,6 +2491,7 @@
         branchStack = [me];
         setStatus("");
         els.mainUi.classList.remove("hidden");
+        showExplorerChrome();
         await renderTree();
       } catch (err) {
         setStatus(err.message, true);
