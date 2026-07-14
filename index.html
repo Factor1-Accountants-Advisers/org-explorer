@@ -504,7 +504,6 @@
     </div>
   </div>
 
-  <script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script>
   <script>
     const CONFIG = {
       clientId: "3cc7e474-6af5-4f3e-8c5f-607c5cfc11b8",
@@ -631,6 +630,40 @@
       btnLive: document.getElementById("btn-live"),
     };
 
+    // ── MSAL loader (alcdn URL 404s; use jsDelivr with fallback) ───────────────
+    function loadMsalLibrary() {
+      if (window.msal) return Promise.resolve(window.msal);
+
+      const sources = [
+        "https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.3/lib/msal-browser.min.js",
+        "https://unpkg.com/@azure/msal-browser@2.38.3/lib/msal-browser.min.js",
+      ];
+
+      return new Promise((resolve, reject) => {
+        let index = 0;
+
+        const tryNext = () => {
+          if (window.msal) return resolve(window.msal);
+          if (index >= sources.length) {
+            reject(new Error("Could not load Microsoft sign-in library. Check your network or ad blocker."));
+            return;
+          }
+
+          const script = document.createElement("script");
+          script.src = sources[index++];
+          script.async = true;
+          script.onload = () => {
+            if (window.msal) resolve(window.msal);
+            else tryNext();
+          };
+          script.onerror = tryNext;
+          document.head.appendChild(script);
+        };
+
+        tryNext();
+      });
+    }
+
     // ── Auth ────────────────────────────────────────────────────────────────────
     function getMsalConfig() {
       return {
@@ -644,9 +677,16 @@
       };
     }
 
+    async function ensureMsal() {
+      await loadMsalLibrary();
+      if (!msalInstance) {
+        msalInstance = new msal.PublicClientApplication(getMsalConfig());
+        await msalInstance.initialize();
+      }
+    }
+
     async function initAuth() {
-      if (CONFIG.clientId === "YOUR_CLIENT_ID_HERE") return false;
-      msalInstance = new msal.PublicClientApplication(getMsalConfig());
+      await ensureMsal();
       await msalInstance.initialize();
       const redirectResult = await msalInstance.handleRedirectPromise();
       account = redirectResult?.account || msalInstance.getAllAccounts()[0] || null;
@@ -654,8 +694,14 @@
       return !!account;
     }
 
-    async function signIn() { await msalInstance.loginRedirect({ scopes: CONFIG.scopes }); }
-    async function signOut() { await msalInstance.logoutRedirect(); }
+    async function signIn() {
+      await ensureMsal();
+      await msalInstance.loginRedirect({ scopes: CONFIG.scopes });
+    }
+    async function signOut() {
+      await ensureMsal();
+      await msalInstance.logoutRedirect();
+    }
 
     async function getToken() {
       if (!account) throw new Error("Not signed in");
@@ -1142,8 +1188,13 @@
     els.btnSignIn.addEventListener("click", signIn);
     els.btnSignOut.addEventListener("click", signOut);
     els.btnHome.addEventListener("click", goHome);
-    els.btnLive.addEventListener("click", () => {
-      window.location.href = "?demo=0";
+    els.btnLive.addEventListener("click", async () => {
+      try {
+        await initAuth();
+        await signIn();
+      } catch (err) {
+        setStatus(err.message, true);
+      }
     });
 
     els.searchInput.addEventListener("input", (e) => runSearch(e.target.value));
@@ -1171,6 +1222,7 @@
           return;
         }
 
+        await ensureMsal();
         const authed = await initAuth();
         if (!authed) {
           setStatus("Sign in with your Microsoft 365 account.");
