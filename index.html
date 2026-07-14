@@ -225,10 +225,15 @@
 
     .tree-viewport {
       position: relative;
-      height: 540px;
-      min-height: 540px;
+      height: 580px;
+      min-height: 580px;
       padding: 0.25rem 0.5rem 0.5rem;
       overflow: hidden;
+    }
+
+    .tree-viewport.has-manager {
+      height: 680px;
+      min-height: 680px;
     }
 
     .branch-svg {
@@ -301,9 +306,9 @@
 
     .tree-row.reports-row {
       flex-wrap: nowrap;
-      justify-content: flex-start;
+      justify-content: center;
       width: max-content;
-      min-width: 100%;
+      margin-inline: auto;
       gap: 1rem;
       padding: 0 0.25rem;
     }
@@ -328,6 +333,7 @@
       border-radius: var(--radius);
       background: linear-gradient(180deg, #ffffff 0%, #f7f9fc 100%);
       width: 100%;
+      min-height: 196px;
       text-align: center;
       box-shadow: var(--shadow);
       transition: border-color 0.18s, box-shadow 0.18s, transform 0.15s, background 0.18s;
@@ -353,12 +359,14 @@
       box-shadow: 0 0 0 4px rgba(227, 82, 5, 0.16), var(--shadow);
       padding: 1.15rem 1rem 1.1rem;
       cursor: default;
+      min-height: 210px;
     }
 
     .tree-node.manager .node-card {
       padding: 0.8rem 0.75rem 0.85rem;
       border-radius: 18px;
       opacity: 0.92;
+      min-height: 148px;
     }
 
     .avatar {
@@ -412,17 +420,38 @@
     .tree-node.current .node-title { font-size: 0.82rem; }
     .tree-node.manager .node-title { font-size: 0.72rem; }
 
-    .node-dept {
+    .node-tags {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.22rem;
+      width: 100%;
+      margin-top: 0.05rem;
+    }
+
+    .node-tag {
       font-size: 0.68rem;
-      color: #4b6280;
-      background: #eef2f7;
       padding: 0.18rem 0.55rem;
       border-radius: var(--radius-pill);
-      margin-top: 0.1rem;
       max-width: 100%;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+    }
+
+    .node-company {
+      color: #5c4a3a;
+      background: #f3ebe4;
+    }
+
+    .node-dept {
+      color: #4b6280;
+      background: #eef2f7;
+    }
+
+    .tree-node.current .node-company {
+      background: #f5dcc8;
+      color: #7a2812;
     }
 
     .tree-node.current .node-dept {
@@ -435,7 +464,9 @@
       color: var(--accent);
       font-weight: 600;
       letter-spacing: 0.01em;
-      margin-top: 0.05rem;
+      margin-top: auto;
+      min-height: 0.95rem;
+      padding-top: 0.1rem;
       opacity: 0.85;
     }
 
@@ -849,6 +880,13 @@
 
     function sortPeople(users) {
       return [...users].sort((a, b) => {
+        const companyA = (a.companyName || "").trim().toLowerCase();
+        const companyB = (b.companyName || "").trim().toLowerCase();
+        if (companyA !== companyB) {
+          if (!companyA) return 1;
+          if (!companyB) return -1;
+          return companyA.localeCompare(companyB);
+        }
         const deptA = (a.department || "").trim().toLowerCase();
         const deptB = (b.department || "").trim().toLowerCase();
         if (deptA !== deptB) {
@@ -858,6 +896,16 @@
         }
         return (a.displayName || "").localeCompare(b.displayName || "", undefined, { sensitivity: "base" });
       });
+    }
+
+    function orgTagsHtml(user) {
+      const company = user.companyName?.trim();
+      const dept = user.department?.trim();
+      if (!company && !dept) return "";
+      const tags = [];
+      if (company) tags.push(`<span class="node-tag node-company">${escapeHtml(company)}</span>`);
+      if (dept) tags.push(`<span class="node-tag node-dept">${escapeHtml(dept)}</span>`);
+      return `<div class="node-tags">${tags.join("")}</div>`;
     }
 
     async function graphGet(path) {
@@ -981,18 +1029,20 @@
       const avatar = photo
         ? `<img class="avatar" src="${photo}" alt="" />`
         : `<div class="avatar">${escapeHtml(initials(user))}</div>`;
-      const dept = user.department?.trim();
-      const hint = role === "manager" ? "↑ Go up"
+      const hintText = role === "manager" ? "↑ Go up"
         : role === "report" && reportCount > 0
           ? `${reportCount} direct report${reportCount === 1 ? "" : "s"}`
+        : "";
+      const hintHtml = role === "report" || hintText
+        ? `<span class="node-hint">${hintText ? escapeHtml(hintText) : ""}</span>`
         : "";
 
       const cardInner = `
         ${avatar}
         <span class="node-name">${escapeHtml(user.displayName)}</span>
         <span class="node-title">${escapeHtml(user.jobTitle || "—")}</span>
-        ${dept ? `<span class="node-dept">${escapeHtml(dept)}</span>` : ""}
-        ${hint ? `<span class="node-hint">${hint}</span>` : ""}
+        ${orgTagsHtml(user)}
+        ${hintHtml}
       `;
 
       if (role === "current") {
@@ -1122,8 +1172,11 @@
       reports = sortPeople(reports);
 
       const parts = [];
+      const showManager = !!(manager?.id && deptMatches(manager));
 
-      if (manager?.id && deptMatches(manager)) {
+      els.treeViewport.classList.toggle("has-manager", branchStack.length >= 2);
+
+      if (showManager) {
         parts.push(`<div class="tree-row manager-row">${await nodeHtml(manager, "manager")}</div>`);
       } else if (manager?.id && departmentFilter) {
         parts.push('<p class="empty-layer">Manager is outside the selected department</p>');
@@ -1244,12 +1297,17 @@
         if (!results.length) {
           els.searchResults.innerHTML = `<div class="empty-layer" style="padding:0.75rem;max-width:none">No matches</div>`;
         } else {
-          els.searchResults.innerHTML = results.map((u) => `
+          els.searchResults.innerHTML = results.map((u) => {
+            const company = u.companyName?.trim();
+            const dept = u.department?.trim();
+            const meta = [u.jobTitle, company, dept].filter(Boolean).map((s) => escapeHtml(s)).join(" · ");
+            return `
             <button type="button" data-search-id="${u.id}">
               ${escapeHtml(u.displayName)}
-              <span class="sub">${escapeHtml(u.jobTitle || "")}${u.department ? " · " + escapeHtml(u.department.trim()) : ""}</span>
+              <span class="sub">${meta}</span>
             </button>
-          `).join("");
+          `;
+          }).join("");
           els.searchResults.querySelectorAll("[data-search-id]").forEach((btn) => {
             btn.addEventListener("click", () => navigateToPerson(btn.dataset.searchId));
           });
