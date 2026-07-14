@@ -687,7 +687,6 @@
 
     async function initAuth() {
       await ensureMsal();
-      await msalInstance.initialize();
       const redirectResult = await msalInstance.handleRedirectPromise();
       account = redirectResult?.account || msalInstance.getAllAccounts()[0] || null;
       updateAuthUI();
