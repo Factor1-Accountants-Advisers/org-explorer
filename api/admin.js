@@ -176,6 +176,35 @@ function normalizeGuid(id) {
     .toLowerCase();
 }
 
+async function graphBatch(token, requests) {
+  const map = new Map();
+  if (!requests.length) return map;
+  const res = await fetch(`${GRAPH}/$batch`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ requests }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(graphMessage(data, "Graph batch failed."));
+  }
+  (data.responses || []).forEach((item) => map.set(String(item.id), item));
+  return map;
+}
+
+function batchError(item) {
+  if (!item) return "No Graph response.";
+  if (item.status >= 200 && item.status < 300) return null;
+  let message = graphMessage(item.body, `Graph ${item.status}`);
+  if (/extensionAttribute|onPremises|source of authority/i.test(message)) {
+    message += " Graph can only write CustomAttribute1 for cloud-only users. Hybrid or Exchange-mastered mailboxes must be updated in Exchange.";
+  }
+  return message;
+}
+
 function parseBody(req) {
   if (req.body == null || req.body === "") return {};
   if (typeof req.body === "object") return req.body;
@@ -285,7 +314,88 @@ export default async function handler(req, res) {
       return;
     }
 
-    res.setHeader("Allow", "GET, PATCH");
+    if (req.method === "POST") {
+      if (!isAdmin) {
+        json(res, 403, { error: "You are not in the Org Explorer Admins group." });
+        return;
+      }
+
+      const body = parseBody(req);
+      const updates = Array.isArray(body.updates) ? body.updates : null;
+      if (!updates) {
+        json(res, 400, { error: "updates array is required." });
+        return;
+      }
+      if (updates.length > 20) {
+        json(res, 400, { error: "Send at most 20 updates per request." });
+        return;
+      }
+
+      const queued = [];
+      const results = [];
+      updates.forEach((item, index) => {
+        const userId = typeof item?.userId === "string" ? item.userId.trim() : "";
+        if (!userId) {
+          results.push({ userId: "", ok: false, error: "userId is required." });
+          return;
+        }
+        queued.push({
+          id: String(index + 1),
+          userId,
+          companyName: normalizeField(item.companyName),
+          department: normalizeField(item.department),
+          jobTitle: normalizeField(item.jobTitle),
+          team: normalizeField(item.team),
+        });
+      });
+
+      const profileMap = await graphBatch(appToken, queued.map((item) => ({
+        id: item.id,
+        method: "PATCH",
+        url: `/users/${item.userId}`,
+        headers: { "Content-Type": "application/json" },
+        body: {
+          companyName: item.companyName || null,
+          department: item.department || null,
+          jobTitle: item.jobTitle || null,
+        },
+      })));
+      const teamMap = await graphBatch(appToken, queued.map((item) => ({
+        id: item.id,
+        method: "PATCH",
+        url: `/users/${item.userId}`,
+        headers: { "Content-Type": "application/json" },
+        body: {
+          onPremisesExtensionAttributes: {
+            extensionAttribute1: item.team || null,
+          },
+        },
+      })));
+
+      queued.forEach((item) => {
+        const profileError = batchError(profileMap.get(item.id));
+        const teamError = batchError(teamMap.get(item.id));
+        if (profileError && teamError) {
+          results.push({ userId: item.userId, ok: false, error: profileError });
+          return;
+        }
+        results.push({
+          userId: item.userId,
+          ok: true,
+          companyName: item.companyName || null,
+          department: item.department || null,
+          jobTitle: item.jobTitle || null,
+          team: item.team || null,
+          ...(profileError ? { profileError } : {}),
+          ...(teamError ? { teamError } : {}),
+        });
+      });
+
+      json(res, 200, { ok: true, results });
+      return;
+    }
+
+    res.setHeader("Allow", "GET, PATCH, POST");
     json(res, 405, { error: "Method not allowed." });
   } catch (err) {
     json(res, 500, { error: err.message || "Admin API failed." });

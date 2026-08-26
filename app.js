@@ -184,6 +184,8 @@ const els = {
   btnAdmin: document.getElementById("btn-admin"),
   btnAdminBack: document.getElementById("btn-admin-back"),
   btnAdminCsv: document.getElementById("btn-admin-csv"),
+  btnAdminCsvApply: document.getElementById("btn-admin-csv-apply"),
+  adminCsvFile: document.getElementById("admin-csv-file"),
   adminUi: document.getElementById("admin-ui"),
   adminSearchInput: document.getElementById("admin-search-input"),
   adminResults: document.getElementById("admin-results"),
@@ -1937,6 +1939,151 @@ async function downloadOrgCsv() {
   }
 }
 
+function parseCsvText(text) {
+  const rows = [];
+  let row = [];
+  let field = "";
+  let quoted = false;
+  const input = String(text || "").replace(/^\uFEFF/, "");
+  for (let i = 0; i < input.length; i++) {
+    const char = input[i];
+    if (quoted) {
+      if (char === '"') {
+        if (input[i + 1] === '"') {
+          field += '"';
+          i += 1;
+        } else {
+          quoted = false;
+        }
+      } else {
+        field += char;
+      }
+    } else if (char === '"') {
+      quoted = true;
+    } else if (char === ",") {
+      row.push(field);
+      field = "";
+    } else if (char === "\n") {
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = "";
+    } else if (char !== "\r") {
+      field += char;
+    }
+  }
+  if (field.length || row.length) {
+    row.push(field);
+    rows.push(row);
+  }
+  return rows.filter((item) => item.some((value) => String(value).trim()));
+}
+
+function updatesFromCsv(text) {
+  const rows = parseCsvText(text);
+  if (!rows.length) throw new Error("CSV is empty.");
+  const header = rows[0].map((value) => value.trim());
+  const col = (name) => header.indexOf(name);
+  const idCol = col("id");
+  if (idCol < 0) throw new Error("CSV must include an id column.");
+  const companyCol = col("companyName");
+  const deptCol = col("department");
+  const teamCol = col("team");
+  const titleCol = col("jobTitle");
+  return rows.slice(1).map((row) => ({
+    userId: (row[idCol] || "").trim(),
+    companyName: companyCol >= 0 ? (row[companyCol] || "").trim() : "",
+    department: deptCol >= 0 ? (row[deptCol] || "").trim() : "",
+    team: teamCol >= 0 ? (row[teamCol] || "").trim() : "",
+    jobTitle: titleCol >= 0 ? (row[titleCol] || "").trim() : "",
+  })).filter((item) => item.userId);
+}
+
+async function postAdminUpdates(updates) {
+  if (demoMode) {
+    return updates.map((item) => {
+      const raw = DEMO_USERS[item.userId];
+      if (raw) {
+        raw.companyName = item.companyName;
+        raw.department = item.department;
+        raw.team = item.team;
+        raw.jobTitle = item.jobTitle;
+      }
+      applyUserPatch(item.userId, item);
+      return { userId: item.userId, ok: true, ...item };
+    });
+  }
+
+  const token = await getToken();
+  if (!token) throw new Error("Sign in required.");
+  const res = await fetch("/api/admin", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ updates }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Bulk update failed.");
+  return data.results || [];
+}
+
+async function applyCsvUpdates(updates) {
+  const results = [];
+  for (let i = 0; i < updates.length; i += 20) {
+    const chunk = updates.slice(i, i + 20);
+    els.btnAdminCsvApply.textContent = `Applying ${Math.min(i + chunk.length, updates.length)}/${updates.length}…`;
+    const chunkResults = await postAdminUpdates(chunk);
+    chunkResults.forEach((item) => {
+      if (item.ok) applyUserPatch(item.userId, item);
+    });
+    results.push(...chunkResults);
+  }
+  directoryPeople = null;
+  try {
+    await fetchDirectoryPeople();
+  } catch { /* keep patched cache */ }
+  await refreshAfterEdit();
+  return results;
+}
+
+function chooseAdminCsv() {
+  els.adminCsvFile.value = "";
+  els.adminCsvFile.click();
+}
+
+async function onAdminCsvChosen(e) {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  const previous = els.btnAdminCsvApply.textContent;
+  els.btnAdminCsvApply.disabled = true;
+  try {
+    const updates = updatesFromCsv(await file.text());
+    if (!updates.length) throw new Error("No people found in that CSV.");
+    const ok = window.confirm(demoMode
+      ? `Apply company, department, team, and role for ${updates.length} people in this preview session?`
+      : `Write company, department, team, and role for ${updates.length} people to Microsoft 365?`);
+    if (!ok) return;
+    const results = await applyCsvUpdates(updates);
+    const failed = results.filter((item) => !item.ok);
+    const teamIssues = results.filter((item) => item.ok && item.teamError);
+    if (failed.length) {
+      setStatus(`Updated ${results.length - failed.length} people. ${failed.length} failed.`, true);
+    } else if (teamIssues.length) {
+      setStatus(`Updated ${results.length} people. Team (CustomAttribute1) failed for ${teamIssues.length} hybrid/Exchange-mastered mailboxes.`);
+    } else {
+      setStatus(`Updated ${results.length} people in Microsoft 365.`);
+    }
+  } catch (err) {
+    setStatus(err.message || "Could not apply CSV.", true);
+  } finally {
+    els.btnAdminCsvApply.disabled = false;
+    els.btnAdminCsvApply.textContent = previous;
+    els.adminCsvFile.value = "";
+  }
+}
+
 function closeAdmin() {
   els.adminUi.classList.add("hidden");
   els.branchView.classList.remove("hidden");
@@ -2127,6 +2274,8 @@ els.btnFullTree.addEventListener("click", () => openFullTree());
 els.btnAdmin.addEventListener("click", () => openAdmin());
 els.btnAdminBack.addEventListener("click", () => closeAdmin());
 els.btnAdminCsv.addEventListener("click", () => downloadOrgCsv());
+els.btnAdminCsvApply.addEventListener("click", () => chooseAdminCsv());
+els.adminCsvFile.addEventListener("change", (e) => onAdminCsvChosen(e));
 Object.keys(EDIT_FIELDS).forEach((kind) => bindEditField(kind));
 els.btnFtBack.addEventListener("click", () => closeFullTree());
 els.btnFtEmployees.addEventListener("click", () => setFtMode("employees"));
