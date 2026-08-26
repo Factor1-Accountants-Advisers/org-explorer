@@ -334,7 +334,10 @@ function cacheUser(user) {
   const team = userTeam(user);
   if (team) user.team = team;
   userCache.set(user.id, user);
+}
 
+function rememberOrgFields(user) {
+  const team = userTeam(user);
   const company = user.companyName?.trim();
   const dept = user.department?.trim();
   const role = user.jobTitle?.trim();
@@ -349,6 +352,14 @@ function cacheUser(user) {
       if (team) teamsByCompanyDept.get(key).add(team);
     }
   }
+}
+
+function rebuildOrgCatalogs() {
+  knownCompanies = new Set();
+  departmentsByCompany.clear();
+  teamsByCompanyDept.clear();
+  knownRoles.clear();
+  userCache.forEach(rememberOrgFields);
 }
 
 async function fetchUser(userId) {
@@ -462,7 +473,7 @@ function orgTagsHtml(user) {
   const company = user.companyName?.trim();
   const dept = user.department?.trim();
   const team = userTeam(user);
-  if (!company && !dept && !team) return "";
+  if (!company && !dept && !team) return `<div class="node-tags"></div>`;
   const tags = [];
   if (company) {
     const tone = companyBadgeClass(company);
@@ -734,6 +745,7 @@ function refreshTeamDropdown() {
 }
 
 function refreshOrgFilters() {
+  rebuildOrgCatalogs();
   refreshCompanyDropdown();
   refreshDeptDropdown();
   refreshTeamDropdown();
@@ -1682,31 +1694,9 @@ const extraCatalog = {
   role: new Set(),
 };
 
-function persistExtraCatalog() {
-  try {
-    sessionStorage.setItem("org-extra-catalog", JSON.stringify({
-      company: [...extraCatalog.company],
-      department: [...extraCatalog.department],
-      team: [...extraCatalog.team],
-      role: [...extraCatalog.role],
-    }));
-  } catch { /* private mode */ }
+function clearExtraCatalog() {
+  Object.keys(extraCatalog).forEach((kind) => extraCatalog[kind].clear());
 }
-
-function restoreExtraCatalog() {
-  try {
-    const raw = sessionStorage.getItem("org-extra-catalog");
-    if (!raw) return;
-    const data = JSON.parse(raw);
-    Object.keys(extraCatalog).forEach((kind) => {
-      (data[kind] || []).forEach((value) => {
-        if (value) extraCatalog[kind].add(value);
-      });
-    });
-  } catch { /* ignore */ }
-}
-
-restoreExtraCatalog();
 
 const ADD_NEW = "__new__";
 
@@ -1750,6 +1740,7 @@ const EDIT_FIELDS = {
 };
 
 function catalogValues(kind) {
+  rebuildOrgCatalogs();
   const values = new Set(extraCatalog[kind]);
   if (kind === "company") knownCompanies.forEach((v) => values.add(v));
   if (kind === "role") knownRoles.forEach((v) => values.add(v));
@@ -1771,8 +1762,6 @@ function fillEditSelect(kind, selected) {
   const select = document.getElementById(field.selectId);
   const values = catalogValues(kind);
   if (selected && !values.includes(selected)) {
-    extraCatalog[kind].add(selected);
-    persistExtraCatalog();
     values.push(selected);
     values.sort((a, b) => a.localeCompare(b));
   }
@@ -1820,9 +1809,6 @@ function addCatalogValue(kind) {
   const existing = catalogValues(kind).find((v) => v.toLowerCase() === value.toLowerCase());
   const chosen = existing || value;
   extraCatalog[kind].add(chosen);
-  if (kind === "company") knownCompanies.add(chosen);
-  if (kind === "role") knownRoles.add(chosen);
-  persistExtraCatalog();
   fillEditSelect(kind, chosen);
 }
 
@@ -2140,6 +2126,7 @@ function applyUserPatch(userId, payload) {
 }
 
 async function refreshAfterEdit() {
+  clearExtraCatalog();
   refreshOrgFilters();
   if (!els.adminUi.classList.contains("hidden")) renderAdminList(els.adminSearchInput.value);
   if (!els.branchView.classList.contains("hidden")) await renderTree();
