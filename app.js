@@ -1042,11 +1042,25 @@ async function navigateToPerson(userId) {
   }
 }
 
+function showBranchView() {
+  els.adminUi.classList.add("hidden");
+  els.fullTreeUi.classList.add("hidden");
+  els.branchView.classList.remove("hidden");
+  showExplorerChrome();
+}
+
 async function goHome() {
   if (!myUserId) return;
-  branchStack = [await fetchUser("me")];
+  showBranchView();
   animDirection = null;
-  await renderTree();
+  try {
+    const me = await fetchUser(demoMode ? myUserId : "me");
+    branchStack = [me];
+    setStatus("");
+    await renderTree();
+  } catch (err) {
+    setStatus(err.message || "Could not open your profile.", true);
+  }
 }
 
 // ── Search ──────────────────────────────────────────────────────────────────
@@ -1817,13 +1831,23 @@ async function resolveAdminAccess() {
     const res = await fetch("/api/admin", {
       headers: { Authorization: `Bearer ${token}` },
     });
-    if (!res.ok) return;
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      isAdmin = false;
+      els.btnAdmin.classList.add("hidden");
+      const detail = data.error || res.statusText;
+      console.warn("Admin check failed:", detail);
+      if (res.status >= 500) {
+        setStatus(`Admin is unavailable: ${detail}`, true);
+      }
+      return;
+    }
     isAdmin = !!data.isAdmin;
     els.btnAdmin.classList.toggle("hidden", !isAdmin);
-  } catch {
+  } catch (err) {
     isAdmin = false;
     els.btnAdmin.classList.add("hidden");
+    console.warn("Admin check failed:", err);
   }
 }
 

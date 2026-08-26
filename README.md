@@ -36,6 +36,7 @@ Application (server, admin writes only):
 
 - `User.ReadWrite.All`
 - `GroupMember.Read.All`
+- `Group.Read.All` (so group **owners** count as admins, not only members)
 
 Both application permissions need **admin consent**. Create a client secret and store it in Vercel as `ENTRA_CLIENT_SECRET`. Do not put the secret in the frontend.
 
@@ -48,10 +49,11 @@ Redirect URIs (SPA):
 ### Admin group
 
 1. In Entra ID create a security group, e.g. **Org Explorer Admins**.
-2. Add the people who should edit company, department, team, and role.
-3. Copy the group **object ID** into Vercel env `ADMIN_GROUP_ID`.
+2. Add the people who should edit under **Members** (Owners alone is not enough unless `Group.Read.All` is granted).
+3. Copy the group **Object ID** from Entra → Groups → the group → Overview. Do not use the display name or mail nickname.
+4. In Vercel → Project → Settings → Environment Variables, add `ADMIN_GROUP_ID` for **Production** (Preview/Development do not apply to the live URL). Redeploy after saving.
 
-Only members of that group see **Admin** and can save. Viewing the org chart still uses read-only delegated Graph calls.
+Members and owners of that group see **Admin** and can save. Viewing the org chart still uses read-only delegated Graph calls.
 
 ### Team / CustomAttribute1
 
@@ -71,3 +73,4 @@ Graph can write `extensionAttribute1` only for **cloud-only** users (`onPremises
 
 3. Deploy, then add the Vercel origin as an SPA redirect URI in Entra ID.
 4. Grant admin consent for the application permissions if you have not already.
+5. After changing env vars, **Redeploy** the Production deployment. New variables are not picked up by an already-running deploy.

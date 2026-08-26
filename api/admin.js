@@ -66,7 +66,28 @@ async function isGroupMember(appToken, userId, groupId) {
   if (!res.ok) {
     throw new Error(graphMessage(data, "Could not verify admin group membership."));
   }
-  return Array.isArray(data.value) && data.value.includes(groupId);
+  const wanted = normalizeGuid(groupId);
+  return (data.value || []).some((id) => normalizeGuid(id) === wanted);
+}
+
+function normalizeGuid(id) {
+  return String(id || "").trim().replace(/[{}]/g, "").toLowerCase();
+}
+
+async function isGroupOwner(appToken, userId, groupId) {
+  const res = await fetch(
+    `${GRAPH}/groups/${encodeURIComponent(groupId)}/owners?$select=id`,
+    { headers: { Authorization: `Bearer ${appToken}` } }
+  );
+  if (!res.ok) return false;
+  const data = await res.json().catch(() => ({}));
+  const uid = normalizeGuid(userId);
+  return (data.value || []).some((owner) => normalizeGuid(owner.id) === uid);
+}
+
+async function isGroupAdmin(appToken, userId, groupId) {
+  if (await isGroupMember(appToken, userId, groupId)) return true;
+  return isGroupOwner(appToken, userId, groupId);
 }
 
 function parseBody(req) {
@@ -87,9 +108,9 @@ export default async function handler(req, res) {
     return;
   }
 
-  const groupId = process.env.ADMIN_GROUP_ID;
+  const groupId = normalizeGuid(process.env.ADMIN_GROUP_ID);
   if (!groupId) {
-    json(res, 500, { error: "ADMIN_GROUP_ID is not configured." });
+    json(res, 500, { error: "ADMIN_GROUP_ID is not configured on this Vercel environment. Set it to the Entra group's Object ID (not the name) for Production, then redeploy." });
     return;
   }
 
@@ -101,7 +122,7 @@ export default async function handler(req, res) {
     }
 
     const appToken = await getAppToken();
-    const isAdmin = await isGroupMember(appToken, caller.id, groupId);
+    const isAdmin = await isGroupAdmin(appToken, caller.id, groupId);
 
     if (req.method === "GET") {
       json(res, 200, { isAdmin, userId: caller.id });
