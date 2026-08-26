@@ -74,42 +74,98 @@ async function callerFromUserToken(authHeader) {
   return res.json();
 }
 
-async function checkMemberGroups(token, path, groupId) {
+async function graphJson(token, path, options = {}) {
   const res = await fetch(`${GRAPH}${path}`, {
-    method: "POST",
+    method: options.method || "GET",
     headers: {
       Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
+      ...(options.body ? { "Content-Type": "application/json" } : {}),
     },
-    body: JSON.stringify({ groupIds: [groupId] }),
+    body: options.body ? JSON.stringify(options.body) : undefined,
   });
   const data = await res.json().catch(() => ({}));
-  if (res.status === 401 || res.status === 403) return null;
+  return { res, data };
+}
+
+async function checkMemberGroups(token, path, groupId) {
+  const { res, data } = await graphJson(token, path, {
+    method: "POST",
+    body: { groupIds: [groupId] },
+  });
+  if (res.status === 401 || res.status === 403) return { result: null, status: res.status };
   if (!res.ok) {
     throw new Error(graphMessage(data, "Could not verify admin group membership."));
   }
   const wanted = normalizeGuid(groupId);
-  return (data.value || []).some((id) => normalizeGuid(id) === wanted);
+  const hit = (data.value || []).some((id) => normalizeGuid(id) === wanted);
+  return { result: hit, status: res.status };
+}
+
+async function getMemberGroupsContains(token, path, groupId) {
+  const { res, data } = await graphJson(token, path, {
+    method: "POST",
+    body: { securityEnabledOnly: false },
+  });
+  if (res.status === 401 || res.status === 403) return { result: null, status: res.status };
+  if (!res.ok) return { result: null, status: res.status, error: graphMessage(data, res.statusText) };
+  const wanted = normalizeGuid(groupId);
+  const hit = (data.value || []).some((id) => normalizeGuid(id) === wanted);
+  return { result: hit, status: res.status };
+}
+
+async function isDirectMember(token, groupId, userId) {
+  const { res } = await graphJson(
+    token,
+    `/groups/${encodeURIComponent(groupId)}/members/${encodeURIComponent(userId)}?$select=id`
+  );
+  if (res.status === 404) return { result: false, status: 404 };
+  if (res.status === 401 || res.status === 403) return { result: null, status: res.status };
+  return { result: res.ok, status: res.status };
+}
+
+async function readGroup(token, groupId) {
+  const { res, data } = await graphJson(
+    token,
+    `/groups/${encodeURIComponent(groupId)}?$select=id,displayName,groupTypes,securityEnabled,mailEnabled,visibility`
+  );
+  if (!res.ok) return null;
+  return {
+    id: data.id,
+    displayName: data.displayName,
+    groupTypes: data.groupTypes || [],
+    securityEnabled: data.securityEnabled,
+    mailEnabled: data.mailEnabled,
+    visibility: data.visibility,
+  };
 }
 
 async function isGroupMember(userToken, appToken, userId, groupId) {
-  // Microsoft 365 groups often have hidden membership. App-only tokens omit those
-  // groups unless Member.Read.Hidden is granted. The signed-in member can still see them.
-  const asUser = await checkMemberGroups(userToken, "/me/checkMemberGroups", groupId);
-  if (asUser === true) return true;
-  if (asUser === false) return false;
+  const checks = {};
+  const group = (await readGroup(appToken, groupId)) || (await readGroup(userToken, groupId));
 
-  const asApp = await checkMemberGroups(
+  checks.userCheckMemberGroups = await checkMemberGroups(userToken, "/me/checkMemberGroups", groupId);
+  checks.appDirectMember = await isDirectMember(appToken, groupId, userId);
+  checks.userGetMemberGroups = await getMemberGroupsContains(userToken, "/me/getMemberGroups", groupId);
+  checks.appCheckMemberGroups = await checkMemberGroups(
     appToken,
     `/users/${encodeURIComponent(userId)}/checkMemberGroups`,
     groupId
   );
-  if (asApp === true) return true;
-  if (asApp === false) return false;
-
-  throw new Error(
-    "Could not evaluate group membership. Add delegated GroupMember.Read.All on the Entra app, grant admin consent, then sign out and sign in again. Microsoft 365 groups also need application Member.Read.Hidden if the app-only check is used."
+  checks.appGetMemberGroups = await getMemberGroupsContains(
+    appToken,
+    `/users/${encodeURIComponent(userId)}/getMemberGroups`,
+    groupId
   );
+
+  const isAdmin = Object.values(checks).some((item) => item.result === true);
+  const evaluated = Object.values(checks).some((item) => item.result === true || item.result === false);
+  if (!isAdmin && !evaluated) {
+    throw new Error(
+      "Could not evaluate group membership. Add delegated GroupMember.Read.All, grant admin consent, then sign out and sign in again."
+    );
+  }
+
+  return { isAdmin, checks, group };
 }
 
 function normalizeGuid(id) {
@@ -159,10 +215,16 @@ export default async function handler(req, res) {
 
     const userToken = req.headers.authorization.slice(7);
     const appToken = await getAppToken();
-    const isAdmin = await isGroupMember(userToken, appToken, caller.id, groupId);
+    const membership = await isGroupMember(userToken, appToken, caller.id, groupId);
+    const isAdmin = membership.isAdmin;
 
     if (req.method === "GET") {
-      json(res, 200, { isAdmin, userId: caller.id });
+      json(res, 200, {
+        isAdmin,
+        userId: caller.id,
+        group: membership.group,
+        checks: membership.checks,
+      });
       return;
     }
 

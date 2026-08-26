@@ -1853,6 +1853,9 @@ async function resolveAdminAccess() {
     }
     isAdmin = !!data.isAdmin;
     els.btnAdmin.classList.toggle("hidden", !isAdmin);
+    if (!isAdmin) {
+      console.warn("Admin check: not a member of ADMIN_GROUP_ID", data.group, data.checks);
+    }
   } catch (err) {
     isAdmin = false;
     els.btnAdmin.classList.add("hidden");

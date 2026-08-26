@@ -52,7 +52,7 @@ Redirect URIs (SPA):
 ### Admin group
 
 1. In Entra ID use a Microsoft 365 group or a security group (either works).
-2. Add those people under **Members** (not only Owners).
+2. Add those people under **Members** on the group (the group's **Group memberships** tab is unrelated — that is only groups this group is nested in).
 3. Copy the group **Object ID** from Entra → Groups → the group → Overview. Names and mail nicknames will not work.
 4. In the Vercel project that owns the live URL, set `ADMIN_GROUP_ID` exactly (case-sensitive) for **Production**, then **Redeploy**. Existing deployments do not receive new variables.
 
