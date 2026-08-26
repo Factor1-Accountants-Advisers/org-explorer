@@ -31,13 +31,17 @@ Delegated (SPA, everyone):
 
 - `User.Read`
 - `User.Read.All` (admin consent)
+- `GroupMember.Read.All` (admin consent; needed so Microsoft 365 groups with hidden membership can be evaluated for the signed-in user)
 
 Application (server, admin writes only):
 
 - `User.ReadWrite.All`
 - `GroupMember.Read.All`
+- `Member.Read.Hidden` (admin consent; Microsoft 365 groups often hide members from app-only tokens)
 
-Both application permissions need **admin consent**. Create a client secret and store it in Vercel as `ENTRA_CLIENT_SECRET`. Do not put the secret in the frontend.
+A Microsoft 365 / Teams group is fine. A dedicated security group is not required. After adding delegated `GroupMember.Read.All`, sign out of Org Explorer and sign in again so the new scope is on the token.
+
+Create a client secret and store it in Vercel as `ENTRA_CLIENT_SECRET`. Do not put the secret in the frontend.
 
 Redirect URIs (SPA):
 
@@ -47,7 +51,7 @@ Redirect URIs (SPA):
 
 ### Admin group
 
-1. In Entra ID create a security group, e.g. **Org Explorer Admins**.
+1. In Entra ID use a Microsoft 365 group or a security group (either works).
 2. Add those people under **Members** (not only Owners).
 3. Copy the group **Object ID** from Entra → Groups → the group → Overview. Names and mail nicknames will not work.
 4. In the Vercel project that owns the live URL, set `ADMIN_GROUP_ID` exactly (case-sensitive) for **Production**, then **Redeploy**. Existing deployments do not receive new variables.

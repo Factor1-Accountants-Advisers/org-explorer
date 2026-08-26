@@ -2,7 +2,7 @@ const CONFIG = {
   clientId: "3cc7e474-6af5-4f3e-8c5f-607c5cfc11b8",
   tenantId: "factor1.com.au",
   redirectUri: window.location.origin + "/",
-  scopes: ["User.Read", "User.Read.All"],
+      scopes: ["User.Read", "User.Read.All", "GroupMember.Read.All"],
   graphBase: "https://graph.microsoft.com/v1.0",
 };
 

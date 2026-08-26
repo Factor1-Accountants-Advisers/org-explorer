@@ -74,21 +74,42 @@ async function callerFromUserToken(authHeader) {
   return res.json();
 }
 
-async function isGroupMember(appToken, userId, groupId) {
-  const res = await fetch(`${GRAPH}/users/${encodeURIComponent(userId)}/checkMemberGroups`, {
+async function checkMemberGroups(token, path, groupId) {
+  const res = await fetch(`${GRAPH}${path}`, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${appToken}`,
+      Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ groupIds: [groupId] }),
   });
   const data = await res.json().catch(() => ({}));
+  if (res.status === 401 || res.status === 403) return null;
   if (!res.ok) {
     throw new Error(graphMessage(data, "Could not verify admin group membership."));
   }
   const wanted = normalizeGuid(groupId);
   return (data.value || []).some((id) => normalizeGuid(id) === wanted);
+}
+
+async function isGroupMember(userToken, appToken, userId, groupId) {
+  // Microsoft 365 groups often have hidden membership. App-only tokens omit those
+  // groups unless Member.Read.Hidden is granted. The signed-in member can still see them.
+  const asUser = await checkMemberGroups(userToken, "/me/checkMemberGroups", groupId);
+  if (asUser === true) return true;
+  if (asUser === false) return false;
+
+  const asApp = await checkMemberGroups(
+    appToken,
+    `/users/${encodeURIComponent(userId)}/checkMemberGroups`,
+    groupId
+  );
+  if (asApp === true) return true;
+  if (asApp === false) return false;
+
+  throw new Error(
+    "Could not evaluate group membership. Add delegated GroupMember.Read.All on the Entra app, grant admin consent, then sign out and sign in again. Microsoft 365 groups also need application Member.Read.Hidden if the app-only check is used."
+  );
 }
 
 function normalizeGuid(id) {
@@ -136,8 +157,9 @@ export default async function handler(req, res) {
       return;
     }
 
+    const userToken = req.headers.authorization.slice(7);
     const appToken = await getAppToken();
-    const isAdmin = await isGroupMember(appToken, caller.id, groupId);
+    const isAdmin = await isGroupMember(userToken, appToken, caller.id, groupId);
 
     if (req.method === "GET") {
       json(res, 200, { isAdmin, userId: caller.id });
