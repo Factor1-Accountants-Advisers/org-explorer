@@ -473,7 +473,7 @@ function orgTagsHtml(user) {
   const company = user.companyName?.trim();
   const dept = user.department?.trim();
   const team = userTeam(user);
-  if (!company && !dept && !team) return `<div class="node-tags"></div>`;
+  if (!company && !dept && !team) return "";
   const tags = [];
   if (company) {
     const tone = companyBadgeClass(company);
