@@ -1982,14 +1982,17 @@ function parseCsvText(text) {
 function updatesFromCsv(text) {
   const rows = parseCsvText(text);
   if (!rows.length) throw new Error("CSV is empty.");
-  const header = rows[0].map((value) => value.trim());
-  const col = (name) => header.indexOf(name);
+  const header = rows[0].map((value) => value.trim().toLowerCase());
+  const col = (name) => header.indexOf(name.toLowerCase());
   const idCol = col("id");
   if (idCol < 0) throw new Error("CSV must include an id column.");
   const companyCol = col("companyName");
   const deptCol = col("department");
   const teamCol = col("team");
   const titleCol = col("jobTitle");
+  if (companyCol < 0 || deptCol < 0 || teamCol < 0 || titleCol < 0) {
+    throw new Error("CSV must include companyName, department, team, and jobTitle columns.");
+  }
   return rows.slice(1).map((row) => ({
     userId: (row[idCol] || "").trim(),
     companyName: companyCol >= 0 ? (row[companyCol] || "").trim() : "",
@@ -2031,8 +2034,8 @@ async function postAdminUpdates(updates) {
 
 async function applyCsvUpdates(updates) {
   const results = [];
-  for (let i = 0; i < updates.length; i += 20) {
-    const chunk = updates.slice(i, i + 20);
+  for (let i = 0; i < updates.length; i += 10) {
+    const chunk = updates.slice(i, i + 10);
     els.btnAdminCsvApply.textContent = `Applying ${Math.min(i + chunk.length, updates.length)}/${updates.length}…`;
     const chunkResults = await postAdminUpdates(chunk);
     chunkResults.forEach((item) => {
@@ -2069,7 +2072,12 @@ async function onAdminCsvChosen(e) {
     const failed = results.filter((item) => !item.ok);
     const teamIssues = results.filter((item) => item.ok && item.teamError);
     if (failed.length) {
-      setStatus(`Updated ${results.length - failed.length} people. ${failed.length} failed.`, true);
+      const reasons = [...new Set(failed.map((item) => item.error).filter(Boolean))].slice(0, 2);
+      setStatus(
+        `Updated ${results.length - failed.length} people. ${failed.length} failed.${reasons.length ? ` ${reasons.join(" | ")}` : ""}`,
+        true
+      );
+      console.warn("CSV apply failures", failed.slice(0, 10));
     } else if (teamIssues.length) {
       setStatus(`Updated ${results.length} people. Team (CustomAttribute1) failed for ${teamIssues.length} hybrid/Exchange-mastered mailboxes.`);
     } else {

@@ -176,33 +176,77 @@ function normalizeGuid(id) {
     .toLowerCase();
 }
 
-async function graphBatch(token, requests) {
-  const map = new Map();
-  if (!requests.length) return map;
-  const res = await fetch(`${GRAPH}/$batch`, {
-    method: "POST",
+async function graphPatchUser(token, userId, body) {
+  return fetch(`${GRAPH}/users/${encodeURIComponent(userId)}`, {
+    method: "PATCH",
     headers: {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ requests }),
+    body: JSON.stringify(body),
   });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error(graphMessage(data, "Graph batch failed."));
-  }
-  (data.responses || []).forEach((item) => map.set(String(item.id), item));
-  return map;
 }
 
-function batchError(item) {
-  if (!item) return "No Graph response.";
-  if (item.status >= 200 && item.status < 300) return null;
-  let message = graphMessage(item.body, `Graph ${item.status}`);
+function directoryPatchBody(fields, includeTeam) {
+  const patch = {
+    companyName: fields.companyName || null,
+    department: fields.department || null,
+    jobTitle: fields.jobTitle || null,
+  };
+  if (includeTeam) {
+    patch.onPremisesExtensionAttributes = {
+      extensionAttribute1: fields.team || null,
+    };
+  }
+  return patch;
+}
+
+function withExtAttrHint(message) {
   if (/extensionAttribute|onPremises|source of authority/i.test(message)) {
-    message += " Graph can only write CustomAttribute1 for cloud-only users. Hybrid or Exchange-mastered mailboxes must be updated in Exchange.";
+    return `${message} Graph can only write CustomAttribute1 for cloud-only users. Hybrid or Exchange-mastered mailboxes must be updated in Exchange.`;
   }
   return message;
+}
+
+async function patchDirectoryUser(token, userId, fields) {
+  const resultFields = {
+    userId,
+    companyName: fields.companyName || null,
+    department: fields.department || null,
+    jobTitle: fields.jobTitle || null,
+    team: fields.team || null,
+  };
+
+  let res = await graphPatchUser(token, userId, directoryPatchBody(fields, true));
+  if (res.ok) return { ok: true, ...resultFields };
+
+  const firstErr = await res.json().catch(() => ({}));
+  let message = graphMessage(firstErr, res.statusText);
+
+  if (/extensionAttribute|onPremises|source of authority/i.test(message)) {
+    res = await graphPatchUser(token, userId, directoryPatchBody(fields, false));
+    if (res.ok) {
+      return { ok: true, ...resultFields, teamError: withExtAttrHint(message) };
+    }
+    const secondErr = await res.json().catch(() => ({}));
+    message = graphMessage(secondErr, res.statusText);
+  }
+
+  return { ok: false, userId, error: withExtAttrHint(message) };
+}
+
+async function mapPool(items, limit, fn) {
+  const results = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const index = next;
+      next += 1;
+      results[index] = await fn(items[index]);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => worker()));
+  return results;
 }
 
 function parseBody(req) {
@@ -275,42 +319,18 @@ export default async function handler(req, res) {
       const jobTitle = normalizeField(body.jobTitle);
       const team = normalizeField(body.team);
 
-      const patch = {
-        companyName: companyName || null,
-        department: department || null,
-        jobTitle: jobTitle || null,
-        onPremisesExtensionAttributes: {
-          extensionAttribute1: team || null,
-        },
-      };
-
-      const patchRes = await fetch(`${GRAPH}/users/${encodeURIComponent(userId)}`, {
-        method: "PATCH",
-        headers: {
-          Authorization: `Bearer ${appToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(patch),
+      const patched = await patchDirectoryUser(appToken, userId, {
+        companyName,
+        department,
+        jobTitle,
+        team,
       });
-
-      if (!patchRes.ok) {
-        const err = await patchRes.json().catch(() => ({}));
-        let message = graphMessage(err, patchRes.statusText);
-        if (/extensionAttribute|onPremises|source of authority/i.test(message)) {
-          message += " Graph can only write CustomAttribute1 for cloud-only users. Hybrid or Exchange-mastered mailboxes must be updated in Exchange.";
-        }
-        json(res, patchRes.status, { error: message });
+      if (!patched.ok) {
+        json(res, 400, { error: patched.error });
         return;
       }
 
-      json(res, 200, {
-        ok: true,
-        userId,
-        companyName: companyName || null,
-        department: department || null,
-        jobTitle: jobTitle || null,
-        team: team || null,
-      });
+      json(res, 200, patched);
       return;
     }
 
@@ -326,21 +346,20 @@ export default async function handler(req, res) {
         json(res, 400, { error: "updates array is required." });
         return;
       }
-      if (updates.length > 20) {
-        json(res, 400, { error: "Send at most 20 updates per request." });
+      if (updates.length > 10) {
+        json(res, 400, { error: "Send at most 10 updates per request." });
         return;
       }
 
       const queued = [];
       const results = [];
-      updates.forEach((item, index) => {
+      updates.forEach((item) => {
         const userId = typeof item?.userId === "string" ? item.userId.trim() : "";
         if (!userId) {
           results.push({ userId: "", ok: false, error: "userId is required." });
           return;
         }
         queued.push({
-          id: String(index + 1),
           userId,
           companyName: normalizeField(item.companyName),
           department: normalizeField(item.department),
@@ -349,47 +368,8 @@ export default async function handler(req, res) {
         });
       });
 
-      const profileMap = await graphBatch(appToken, queued.map((item) => ({
-        id: item.id,
-        method: "PATCH",
-        url: `/users/${item.userId}`,
-        headers: { "Content-Type": "application/json" },
-        body: {
-          companyName: item.companyName || null,
-          department: item.department || null,
-          jobTitle: item.jobTitle || null,
-        },
-      })));
-      const teamMap = await graphBatch(appToken, queued.map((item) => ({
-        id: item.id,
-        method: "PATCH",
-        url: `/users/${item.userId}`,
-        headers: { "Content-Type": "application/json" },
-        body: {
-          onPremisesExtensionAttributes: {
-            extensionAttribute1: item.team || null,
-          },
-        },
-      })));
-
-      queued.forEach((item) => {
-        const profileError = batchError(profileMap.get(item.id));
-        const teamError = batchError(teamMap.get(item.id));
-        if (profileError && teamError) {
-          results.push({ userId: item.userId, ok: false, error: profileError });
-          return;
-        }
-        results.push({
-          userId: item.userId,
-          ok: true,
-          companyName: item.companyName || null,
-          department: item.department || null,
-          jobTitle: item.jobTitle || null,
-          team: item.team || null,
-          ...(profileError ? { profileError } : {}),
-          ...(teamError ? { teamError } : {}),
-        });
-      });
+      const patched = await mapPool(queued, 5, (item) => patchDirectoryUser(appToken, item.userId, item));
+      results.push(...patched);
 
       json(res, 200, { ok: true, results });
       return;
