@@ -183,6 +183,7 @@ const els = {
   btnFullTree: document.getElementById("btn-full-tree"),
   btnAdmin: document.getElementById("btn-admin"),
   btnAdminBack: document.getElementById("btn-admin-back"),
+  btnAdminCsv: document.getElementById("btn-admin-csv"),
   adminUi: document.getElementById("admin-ui"),
   adminSearchInput: document.getElementById("admin-search-input"),
   adminResults: document.getElementById("admin-results"),
@@ -195,10 +196,6 @@ const els = {
   editRole: document.getElementById("edit-role"),
   editMessage: document.getElementById("edit-message"),
   btnEditSave: document.getElementById("btn-edit-save"),
-  listCompanies: document.getElementById("list-companies"),
-  listDepartments: document.getElementById("list-departments"),
-  listTeams: document.getElementById("list-teams"),
-  listRoles: document.getElementById("list-roles"),
   btnFtBack: document.getElementById("btn-ft-back"),
   btnFtEmployees: document.getElementById("btn-ft-employees"),
   btnFtStructure: document.getElementById("btn-ft-structure"),
@@ -488,6 +485,47 @@ async function graphGet(path) {
     throw new Error(err.error?.message || res.statusText);
   }
   return res.json();
+}
+
+let directoryPeople = null;
+let directoryPeoplePromise = null;
+
+async function fetchDirectoryPeople() {
+  if (directoryPeople) return directoryPeople;
+  if (directoryPeoplePromise) return directoryPeoplePromise;
+
+  directoryPeoplePromise = (async () => {
+    if (demoMode) {
+      directoryPeople = sortPeople(Object.values(DEMO_USERS).map((raw) => {
+        const user = stripInternal(raw);
+        cacheUser(user);
+        return user;
+      }));
+      return directoryPeople;
+    }
+
+    const users = [];
+    let path = `/users?$select=${USER_SELECT},accountEnabled,userType&$top=999`;
+    while (path) {
+      const data = await graphGet(path);
+      (data?.value || []).forEach((u) => {
+        const guest = (u.userType || "").toLowerCase() === "guest";
+        if (u.id && u.accountEnabled !== false && !guest && (u.displayName || "").trim()) {
+          cacheUser(u);
+          users.push(u);
+        }
+      });
+      const next = data?.["@odata.nextLink"] || "";
+      if (!next) break;
+      path = next.startsWith(CONFIG.graphBase) ? next.slice(CONFIG.graphBase.length) : new URL(next).pathname + new URL(next).search;
+    }
+    directoryPeople = sortPeople(users);
+    return directoryPeople;
+  })().finally(() => {
+    directoryPeoplePromise = null;
+  });
+
+  return directoryPeoplePromise;
 }
 
 async function graphBatch(requests) {
@@ -1635,22 +1673,173 @@ function personMeta(user) {
     .join(" · ");
 }
 
-function fillDatalists() {
-  const setOptions = (el, values) => {
-    el.innerHTML = [...values].sort((a, b) => a.localeCompare(b))
-      .map((v) => `<option value="${escapeHtml(v)}"></option>`).join("");
-  };
-  const depts = new Set();
-  departmentsByCompany.forEach((set) => set.forEach((d) => depts.add(d)));
-  const teams = new Set();
-  teamsByCompanyDept.forEach((set) => set.forEach((t) => teams.add(t)));
-  setOptions(els.listCompanies, knownCompanies);
-  setOptions(els.listDepartments, depts);
-  setOptions(els.listTeams, teams);
-  setOptions(els.listRoles, knownRoles);
+const extraCatalog = {
+  company: new Set(),
+  department: new Set(),
+  team: new Set(),
+  role: new Set(),
+};
+
+function persistExtraCatalog() {
+  try {
+    sessionStorage.setItem("org-extra-catalog", JSON.stringify({
+      company: [...extraCatalog.company],
+      department: [...extraCatalog.department],
+      team: [...extraCatalog.team],
+      role: [...extraCatalog.role],
+    }));
+  } catch { /* private mode */ }
+}
+
+function restoreExtraCatalog() {
+  try {
+    const raw = sessionStorage.getItem("org-extra-catalog");
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    Object.keys(extraCatalog).forEach((kind) => {
+      (data[kind] || []).forEach((value) => {
+        if (value) extraCatalog[kind].add(value);
+      });
+    });
+  } catch { /* ignore */ }
+}
+
+restoreExtraCatalog();
+
+const ADD_NEW = "__new__";
+
+const EDIT_FIELDS = {
+  company: {
+    selectId: "edit-company",
+    wrapId: "new-company-wrap",
+    inputId: "new-company",
+    addId: "btn-add-company",
+    catalog: "company",
+    payload: "companyName",
+    fromUser: (u) => (u.companyName || "").trim(),
+  },
+  department: {
+    selectId: "edit-department",
+    wrapId: "new-department-wrap",
+    inputId: "new-department",
+    addId: "btn-add-department",
+    catalog: "department",
+    payload: "department",
+    fromUser: (u) => (u.department || "").trim(),
+  },
+  team: {
+    selectId: "edit-team",
+    wrapId: "new-team-wrap",
+    inputId: "new-team",
+    addId: "btn-add-team",
+    catalog: "team",
+    payload: "team",
+    fromUser: (u) => userTeam(u),
+  },
+  role: {
+    selectId: "edit-role",
+    wrapId: "new-role-wrap",
+    inputId: "new-role",
+    addId: "btn-add-role",
+    catalog: "role",
+    payload: "jobTitle",
+    fromUser: (u) => (u.jobTitle || "").trim(),
+  },
+};
+
+function catalogValues(kind) {
+  const values = new Set(extraCatalog[kind]);
+  if (kind === "company") knownCompanies.forEach((v) => values.add(v));
+  if (kind === "role") knownRoles.forEach((v) => values.add(v));
+  if (kind === "department") {
+    departmentsByCompany.forEach((set) => set.forEach((v) => values.add(v)));
+  }
+  if (kind === "team") {
+    teamsByCompanyDept.forEach((set) => set.forEach((v) => values.add(v)));
+  }
+  userCache.forEach((u) => {
+    const value = EDIT_FIELDS[kind].fromUser(u);
+    if (value) values.add(value);
+  });
+  return [...values].sort((a, b) => a.localeCompare(b));
+}
+
+function fillEditSelect(kind, selected) {
+  const field = EDIT_FIELDS[kind];
+  const select = document.getElementById(field.selectId);
+  const values = catalogValues(kind);
+  if (selected && !values.includes(selected)) {
+    extraCatalog[kind].add(selected);
+    persistExtraCatalog();
+    values.push(selected);
+    values.sort((a, b) => a.localeCompare(b));
+  }
+  select.innerHTML =
+    `<option value="">— None —</option>` +
+    values.map((v) => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join("") +
+    `<option value="${ADD_NEW}">Add new value…</option>`;
+  select.value = selected || "";
+  toggleNewValueRow(kind, false);
+}
+
+function toggleNewValueRow(kind, on) {
+  const wrap = document.getElementById(EDIT_FIELDS[kind].wrapId);
+  const input = document.getElementById(EDIT_FIELDS[kind].inputId);
+  wrap.classList.toggle("hidden", !on);
+  if (on) {
+    input.value = "";
+    input.focus();
+  }
+}
+
+function bindEditField(kind) {
+  const field = EDIT_FIELDS[kind];
+  const select = document.getElementById(field.selectId);
+  select.addEventListener("change", () => {
+    toggleNewValueRow(kind, select.value === ADD_NEW);
+  });
+  document.getElementById(field.addId).addEventListener("click", () => addCatalogValue(kind));
+  document.getElementById(field.inputId).addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      addCatalogValue(kind);
+    }
+  });
+}
+
+function addCatalogValue(kind) {
+  const field = EDIT_FIELDS[kind];
+  const input = document.getElementById(field.inputId);
+  const value = input.value.trim();
+  if (!value) {
+    input.focus();
+    return;
+  }
+  const existing = catalogValues(kind).find((v) => v.toLowerCase() === value.toLowerCase());
+  const chosen = existing || value;
+  extraCatalog[kind].add(chosen);
+  if (kind === "company") knownCompanies.add(chosen);
+  if (kind === "role") knownRoles.add(chosen);
+  persistExtraCatalog();
+  fillEditSelect(kind, chosen);
+}
+
+function selectedEditValue(kind) {
+  const select = document.getElementById(EDIT_FIELDS[kind].selectId);
+  if (select.value === ADD_NEW) return null;
+  return select.value.trim();
+}
+
+function fillEditSelects() {
+  const user = userCache.get(editingUserId);
+  fillEditSelect("company", user ? EDIT_FIELDS.company.fromUser(user) : "");
+  fillEditSelect("department", user ? EDIT_FIELDS.department.fromUser(user) : "");
+  fillEditSelect("team", user ? EDIT_FIELDS.team.fromUser(user) : "");
+  fillEditSelect("role", user ? EDIT_FIELDS.role.fromUser(user) : "");
 }
 
 function adminPeople() {
+  if (directoryPeople?.length) return sortPeople(directoryPeople);
   if (fullOrgPeople?.length) return sortPeople(fullOrgPeople);
   return sortPeople([...userCache.values()]);
 }
@@ -1696,12 +1885,56 @@ async function openAdmin() {
   if (hint) {
     hint.textContent = demoMode
       ? "Preview mode — edits stay in this browser session."
-      : "Edit company, department, team, and role. Changes are written to Microsoft 365.";
+      : "Pick company, department, team, and role from the lists. Use Add new value to create one.";
   }
   try {
-    await loadFullOrg();
+    await fetchDirectoryPeople();
   } catch { /* list from cache */ }
   renderAdminList(els.adminSearchInput.value);
+}
+
+function csvEscape(value) {
+  const text = String(value ?? "");
+  if (/[",\n\r]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
+  return text;
+}
+
+function orgUsersCsv(people) {
+  const header = ["id", "displayName", "userPrincipalName", "mail", "companyName", "department", "team", "jobTitle"];
+  const rows = people.map((u) => [
+    u.id,
+    u.displayName,
+    u.userPrincipalName,
+    u.mail,
+    u.companyName,
+    u.department,
+    userTeam(u),
+    u.jobTitle,
+  ].map(csvEscape).join(","));
+  return [header.join(","), ...rows].join("\r\n");
+}
+
+async function downloadOrgCsv() {
+  els.btnAdminCsv.disabled = true;
+  const previous = els.btnAdminCsv.textContent;
+  els.btnAdminCsv.textContent = "Preparing CSV…";
+  try {
+    await fetchDirectoryPeople();
+    const people = adminPeople();
+    const csv = orgUsersCsv(people);
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "org-users.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    setStatus(err.message || "Could not export CSV.", true);
+  } finally {
+    els.btnAdminCsv.disabled = false;
+    els.btnAdminCsv.textContent = previous;
+  }
 }
 
 function closeAdmin() {
@@ -1715,14 +1948,10 @@ function openEditDrawer(userId) {
   const user = userCache.get(userId);
   if (!user) return;
   editingUserId = userId;
-  fillDatalists();
+  fillEditSelects();
   els.editDrawerPerson.textContent = [user.displayName, user.userPrincipalName || user.mail]
     .filter(Boolean)
     .join(" · ");
-  els.editCompany.value = user.companyName || "";
-  els.editDepartment.value = user.department || "";
-  els.editTeam.value = userTeam(user);
-  els.editRole.value = user.jobTitle || "";
   els.editMessage.classList.add("hidden");
   els.editMessage.classList.remove("is-error");
   els.editMessage.textContent = "";
@@ -1747,6 +1976,7 @@ function applyUserPatch(userId, payload) {
   };
 
   apply(userCache.get(userId));
+  (directoryPeople || []).forEach((u) => { if (u.id === userId) apply(u); });
   branchStack.forEach((u) => { if (u.id === userId) apply(u); });
   if (fullOrgPeople) {
     const person = fullOrgPeople.find((u) => u.id === userId);
@@ -1765,12 +1995,23 @@ async function saveEdit(e) {
   e.preventDefault();
   if (!editingUserId) return;
 
+  const companyName = selectedEditValue("company");
+  const department = selectedEditValue("department");
+  const team = selectedEditValue("team");
+  const jobTitle = selectedEditValue("role");
+  if (companyName == null || department == null || team == null || jobTitle == null) {
+    els.editMessage.classList.remove("hidden");
+    els.editMessage.classList.add("is-error");
+    els.editMessage.textContent = "Finish adding the new value, or pick an existing one.";
+    return;
+  }
+
   const payload = {
     userId: editingUserId,
-    companyName: els.editCompany.value.trim(),
-    department: els.editDepartment.value.trim(),
-    team: els.editTeam.value.trim(),
-    jobTitle: els.editRole.value.trim(),
+    companyName,
+    department,
+    team,
+    jobTitle,
   };
 
   els.btnEditSave.disabled = true;
@@ -1885,6 +2126,8 @@ els.btnHome.addEventListener("click", goHome);
 els.btnFullTree.addEventListener("click", () => openFullTree());
 els.btnAdmin.addEventListener("click", () => openAdmin());
 els.btnAdminBack.addEventListener("click", () => closeAdmin());
+els.btnAdminCsv.addEventListener("click", () => downloadOrgCsv());
+Object.keys(EDIT_FIELDS).forEach((kind) => bindEditField(kind));
 els.btnFtBack.addEventListener("click", () => closeFullTree());
 els.btnFtEmployees.addEventListener("click", () => setFtMode("employees"));
 els.btnFtStructure.addEventListener("click", () => setFtMode("structure"));

@@ -1017,7 +1017,8 @@ img.avatar {
   color: var(--text);
 }
 
-.drawer-field input {
+.drawer-field input,
+.drawer-field select {
   padding: 0.6rem 0.85rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -1027,10 +1028,26 @@ img.avatar {
   background: var(--surface);
 }
 
-.drawer-field input:focus {
+.drawer-field input:focus,
+.drawer-field select:focus {
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(227, 82, 5, 0.18);
+}
+
+.drawer-new {
+  display: flex;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.drawer-new.hidden { display: none; }
+
+.drawer-new input { flex: 1; }
+
+.drawer-new button {
+  flex-shrink: 0;
+  border-radius: var(--radius-sm);
 }
 
 .drawer-field small {

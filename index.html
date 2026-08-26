@@ -87,7 +87,8 @@
       <div id="admin-ui" class="admin-ui hidden">
         <div class="admin-toolbar">
           <button id="btn-admin-back" type="button">Back to explorer</button>
-          <span class="admin-hint">Edit company, department, team, and role. Changes are written to Microsoft 365.</span>
+          <button id="btn-admin-csv" type="button">Download CSV</button>
+          <span class="admin-hint">Pick company, department, team, and role from the lists. Use Add new value to create one.</span>
         </div>
         <div class="admin-panel">
           <div class="admin-search">
@@ -108,33 +109,45 @@
       </div>
       <p id="edit-drawer-person" class="drawer-person"></p>
       <form id="edit-form" class="drawer-form">
-        <label class="drawer-field">
+        <div class="drawer-field">
           <span>Company</span>
-          <input id="edit-company" type="text" list="list-companies" autocomplete="off" />
-        </label>
-        <label class="drawer-field">
+          <select id="edit-company" aria-label="Company"></select>
+          <div class="drawer-new hidden" id="new-company-wrap">
+            <input id="new-company" type="text" placeholder="New company name" autocomplete="off" />
+            <button type="button" id="btn-add-company">Add</button>
+          </div>
+        </div>
+        <div class="drawer-field">
           <span>Department</span>
-          <input id="edit-department" type="text" list="list-departments" autocomplete="off" />
-        </label>
-        <label class="drawer-field">
+          <select id="edit-department" aria-label="Department"></select>
+          <div class="drawer-new hidden" id="new-department-wrap">
+            <input id="new-department" type="text" placeholder="New department name" autocomplete="off" />
+            <button type="button" id="btn-add-department">Add</button>
+          </div>
+        </div>
+        <div class="drawer-field">
           <span>Team</span>
-          <input id="edit-team" type="text" list="list-teams" autocomplete="off" />
+          <select id="edit-team" aria-label="Team"></select>
           <small>Stored as CustomAttribute1 in Microsoft 365.</small>
-        </label>
-        <label class="drawer-field">
+          <div class="drawer-new hidden" id="new-team-wrap">
+            <input id="new-team" type="text" placeholder="New team name" autocomplete="off" />
+            <button type="button" id="btn-add-team">Add</button>
+          </div>
+        </div>
+        <div class="drawer-field">
           <span>Role</span>
-          <input id="edit-role" type="text" list="list-roles" autocomplete="off" />
-        </label>
+          <select id="edit-role" aria-label="Role"></select>
+          <div class="drawer-new hidden" id="new-role-wrap">
+            <input id="new-role" type="text" placeholder="New role name" autocomplete="off" />
+            <button type="button" id="btn-add-role">Add</button>
+          </div>
+        </div>
         <div id="edit-message" class="drawer-message hidden"></div>
         <div class="drawer-actions">
           <button type="button" id="btn-edit-cancel" data-drawer-close>Cancel</button>
           <button type="submit" id="btn-edit-save" class="primary">Save changes</button>
         </div>
       </form>
-      <datalist id="list-companies"></datalist>
-      <datalist id="list-departments"></datalist>
-      <datalist id="list-teams"></datalist>
-      <datalist id="list-roles"></datalist>
     </div>
   </div>
 
