@@ -1,0 +1,14 @@
+{
+  "name": "org-explorer",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Microsoft 365 org chart navigator for Factor1, with admin editing of company, department, team, and role.",
+  "scripts": {
+    "dev": "npx --yes vercel dev",
+    "preview": "npx --yes serve . -l 8080"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

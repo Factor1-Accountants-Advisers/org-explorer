@@ -1,22 +1,73 @@
 # Org Explorer
 
-Single-page Microsoft 365 org chart navigator for Factor1. Embeddable in SharePoint via Vercel.
+Microsoft 365 org chart navigator for Factor1. Hierarchy is **Company → Department → Team → Role**. Team is stored in Exchange **CustomAttribute1** (`onPremisesExtensionAttributes.extensionAttribute1` in Graph). Embeddable in SharePoint via Vercel.
+
+Repo: [Factor1-Accountants-Advisers/org-explorer](https://github.com/Factor1-Accountants-Advisers/org-explorer)
 
 ## Local preview
 
+View-only (and demo admin, which does not call Graph):
+
 ```bash
-npx serve . -l 8080
+npm run preview
 ```
 
 - Demo data: http://localhost:8080/?demo=1
 - Live Entra sign-in: http://localhost:8080/
 
+Admin writes against Microsoft 365 need the API:
+
+```bash
+npm run dev
+```
+
+That runs `vercel dev` (sign in to Vercel the first time). Copy the production env vars into `.env.local` so `/api/admin` can acquire an app token.
+
 ## Entra app
 
-- Application (client) ID is set in `index.html` (`CONFIG.clientId`)
-- Redirect URI (SPA): `http://localhost:8080/` for local, then your Vercel URL in production
-- Delegated permissions: `User.Read`, `User.Read.All` (admin consent required)
+Use the existing app registration (`CONFIG.clientId` in `app.js`).
 
-## Deploy
+Delegated (SPA, everyone):
 
-Connect this repo to Vercel. After deploy, add the Vercel origin as a SPA redirect URI in Entra ID.
+- `User.Read`
+- `User.Read.All` (admin consent)
+
+Application (server, admin writes only):
+
+- `User.ReadWrite.All`
+- `GroupMember.Read.All`
+
+Both application permissions need **admin consent**. Create a client secret and store it in Vercel as `ENTRA_CLIENT_SECRET`. Do not put the secret in the frontend.
+
+Redirect URIs (SPA):
+
+- `http://localhost:8080/` for `npm run preview`
+- `http://localhost:3000/` for `vercel dev` (check the port it prints)
+- The production Vercel origin, e.g. `https://org-explorer.vercel.app/`
+
+### Admin group
+
+1. In Entra ID create a security group, e.g. **Org Explorer Admins**.
+2. Add the people who should edit company, department, team, and role.
+3. Copy the group **object ID** into Vercel env `ADMIN_GROUP_ID`.
+
+Only members of that group see **Admin** and can save. Viewing the org chart still uses read-only delegated Graph calls.
+
+### Team / CustomAttribute1
+
+Graph can write `extensionAttribute1` only for **cloud-only** users (`onPremisesSyncEnabled` is false or null). Hybrid or Exchange-mastered mailboxes return an error in the edit drawer; those must be updated in Exchange. Confirm CustomAttribute1 is unused in the tenant before the first live save.
+
+## Deploy to Vercel
+
+1. Import `Factor1-Accountants-Advisers/org-explorer` (framework **Other**, root of the repo).
+2. Set environment variables for Production (and Preview if you want admin there):
+
+| Variable | Value |
+| --- | --- |
+| `ENTRA_CLIENT_ID` | Same as `CONFIG.clientId` in `app.js` |
+| `ENTRA_CLIENT_SECRET` | App registration client secret |
+| `ENTRA_TENANT_ID` | `factor1.com.au` or the tenant GUID |
+| `ADMIN_GROUP_ID` | Org Explorer Admins object ID |
+
+3. Deploy, then add the Vercel origin as an SPA redirect URI in Entra ID.
+4. Grant admin consent for the application permissions if you have not already.
