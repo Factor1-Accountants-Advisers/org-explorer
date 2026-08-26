@@ -13,10 +13,31 @@ function graphMessage(err, fallback) {
   return err?.error?.message || err?.error_description || fallback;
 }
 
+function env(name) {
+  if (process.env[name]) return process.env[name];
+  const found = Object.keys(process.env).find((key) => key.toLowerCase() === name.toLowerCase());
+  return found ? process.env[found] : "";
+}
+
+function envPresent() {
+  return {
+    ADMIN_GROUP_ID: Boolean(env("ADMIN_GROUP_ID")),
+    ENTRA_CLIENT_ID: Boolean(env("ENTRA_CLIENT_ID")),
+    ENTRA_CLIENT_SECRET: Boolean(env("ENTRA_CLIENT_SECRET")),
+    ENTRA_TENANT_ID: Boolean(env("ENTRA_TENANT_ID")),
+  };
+}
+
+function similarEnvKeys() {
+  return Object.keys(process.env)
+    .filter((key) => /admin|group|entra/i.test(key))
+    .sort();
+}
+
 async function getAppToken() {
-  const tenant = process.env.ENTRA_TENANT_ID;
-  const clientId = process.env.ENTRA_CLIENT_ID;
-  const clientSecret = process.env.ENTRA_CLIENT_SECRET;
+  const tenant = env("ENTRA_TENANT_ID");
+  const clientId = env("ENTRA_CLIENT_ID");
+  const clientSecret = env("ENTRA_CLIENT_SECRET");
   if (!tenant || !clientId || !clientSecret) {
     throw new Error("Server is missing Entra app credentials.");
   }
@@ -71,23 +92,11 @@ async function isGroupMember(appToken, userId, groupId) {
 }
 
 function normalizeGuid(id) {
-  return String(id || "").trim().replace(/[{}]/g, "").toLowerCase();
-}
-
-async function isGroupOwner(appToken, userId, groupId) {
-  const res = await fetch(
-    `${GRAPH}/groups/${encodeURIComponent(groupId)}/owners?$select=id`,
-    { headers: { Authorization: `Bearer ${appToken}` } }
-  );
-  if (!res.ok) return false;
-  const data = await res.json().catch(() => ({}));
-  const uid = normalizeGuid(userId);
-  return (data.value || []).some((owner) => normalizeGuid(owner.id) === uid);
-}
-
-async function isGroupAdmin(appToken, userId, groupId) {
-  if (await isGroupMember(appToken, userId, groupId)) return true;
-  return isGroupOwner(appToken, userId, groupId);
+  return String(id || "")
+    .trim()
+    .replace(/^['"]+|['"]+$/g, "")
+    .replace(/[{}]/g, "")
+    .toLowerCase();
 }
 
 function parseBody(req) {
@@ -108,9 +117,15 @@ export default async function handler(req, res) {
     return;
   }
 
-  const groupId = normalizeGuid(process.env.ADMIN_GROUP_ID);
+  const groupId = normalizeGuid(env("ADMIN_GROUP_ID"));
   if (!groupId) {
-    json(res, 500, { error: "ADMIN_GROUP_ID is not configured on this Vercel environment. Set it to the Entra group's Object ID (not the name) for Production, then redeploy." });
+    json(res, 500, {
+      error: "ADMIN_GROUP_ID is not available to this deployment. Add it on the Vercel project that serves this URL, tick Production, then Redeploy. Saving the variable on an old deployment is not enough.",
+      vercelEnv: process.env.VERCEL_ENV || null,
+      vercelTargetEnv: process.env.VERCEL_TARGET_ENV || null,
+      envPresent: envPresent(),
+      similarKeys: similarEnvKeys(),
+    });
     return;
   }
 
@@ -122,7 +137,7 @@ export default async function handler(req, res) {
     }
 
     const appToken = await getAppToken();
-    const isAdmin = await isGroupAdmin(appToken, caller.id, groupId);
+    const isAdmin = await isGroupMember(appToken, caller.id, groupId);
 
     if (req.method === "GET") {
       json(res, 200, { isAdmin, userId: caller.id });

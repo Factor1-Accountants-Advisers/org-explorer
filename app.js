@@ -1836,9 +1836,18 @@ async function resolveAdminAccess() {
       isAdmin = false;
       els.btnAdmin.classList.add("hidden");
       const detail = data.error || res.statusText;
-      console.warn("Admin check failed:", detail);
+      console.warn("Admin check failed:", data);
       if (res.status >= 500) {
-        setStatus(`Admin is unavailable: ${detail}`, true);
+        const seen = data.envPresent
+          ? Object.entries(data.envPresent)
+            .filter(([, on]) => on)
+            .map(([key]) => key)
+            .join(", ")
+          : "";
+        setStatus(
+          `Admin is unavailable: ${detail}${seen ? ` Visible env: ${seen}.` : " No matching env vars on this deploy."}`,
+          true
+        );
       }
       return;
     }
