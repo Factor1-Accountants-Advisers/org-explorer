@@ -129,6 +129,7 @@ let editingUserId = null;
 let managerPicker = { loaded: false, selected: null };
 let originalManagerId = "";
 let lastEditChangedManager = false;
+let saveInFlight = false;
 let managerSearchTimer = null;
 let searchTimer = null;
 let animDirection = null;
@@ -209,6 +210,8 @@ const els = {
   editManagerMeta: document.getElementById("edit-manager-meta"),
   btnClearManager: document.getElementById("btn-clear-manager"),
   btnEditSave: document.getElementById("btn-edit-save"),
+  btnEditCancel: document.getElementById("btn-edit-cancel"),
+  btnSaveLabel: document.querySelector("#btn-edit-save .btn-save-label"),
   btnFtBack: document.getElementById("btn-ft-back"),
   btnFtEmployees: document.getElementById("btn-ft-employees"),
   btnFtStructure: document.getElementById("btn-ft-structure"),
@@ -502,6 +505,7 @@ async function graphGet(path) {
   if (!token) return null;
   const res = await fetch(`${CONFIG.graphBase}${path}`, {
     headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
@@ -652,7 +656,7 @@ async function graphSearch(query) {
   return users;
 }
 
-async function buildBranchTo(userId) {
+async function buildBranchTo(userId, managerOverrides = {}) {
   const chain = [];
   let id = userId;
   const seen = new Set();
@@ -660,6 +664,10 @@ async function buildBranchTo(userId) {
     seen.add(id);
     const user = await fetchUser(id);
     chain.unshift(user);
+    if (Object.prototype.hasOwnProperty.call(managerOverrides, id)) {
+      id = managerOverrides[id] || null;
+      continue;
+    }
     const mgr = await fetchManager(id);
     id = mgr?.id || null;
   }
@@ -2142,7 +2150,7 @@ function closeAdmin() {
   els.adminUi.classList.add("hidden");
   els.branchView.classList.remove("hidden");
   showExplorerChrome();
-  scheduleDrawLines();
+  renderTree();
 }
 
 function managerMeta(user) {
@@ -2297,16 +2305,55 @@ async function loadManagerIntoPicker(userId) {
 }
 
 function applyManagerPatch(userId, managerId) {
-  const id = managerId || null;
   if (demoMode && DEMO_USERS[userId]) {
-    DEMO_USERS[userId].managerId = id;
+    DEMO_USERS[userId].managerId = managerId || null;
   }
-  if (fullOrgManagerMap) {
-    fullOrgManagerMap.set(userId, id);
-  }
+  invalidateChartCaches();
+}
+
+function invalidateChartCaches() {
   directReportCountCache.clear();
   orgRootsCache = null;
   orgRootsPromise = null;
+  fullOrgPeople = null;
+  fullOrgManagerMap = null;
+  fullOrgLoadPromise = null;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForManagerMatch(userId, expectedId) {
+  if (demoMode) return fetchManager(userId);
+  const expected = expectedId || null;
+  let last = null;
+  for (let i = 0; i < 8; i++) {
+    last = await fetchManager(userId);
+    if ((last?.id || null) === expected) return last;
+    await sleep(400);
+  }
+  return last;
+}
+
+async function waitForReportsToSettle(currentId, editedId, expectedManagerId) {
+  if (demoMode || !currentId || !editedId || currentId === editedId) return;
+  const shouldReportHere = (expectedManagerId || null) === currentId;
+  for (let i = 0; i < 6; i++) {
+    const reports = await fetchDirectReports(currentId);
+    const isHere = reports.some((u) => u.id === editedId);
+    if (isHere === shouldReportHere) return;
+    await sleep(400);
+  }
+}
+
+function setSaveBusy(on) {
+  saveInFlight = on;
+  els.btnEditSave.disabled = on;
+  els.btnEditSave.classList.toggle("is-saving", on);
+  els.btnEditSave.setAttribute("aria-busy", on ? "true" : "false");
+  if (els.btnSaveLabel) els.btnSaveLabel.textContent = on ? "Saving…" : "Save changes";
+  if (els.btnEditCancel) els.btnEditCancel.disabled = on;
 }
 
 async function openEditDrawer(userId) {
@@ -2325,6 +2372,7 @@ async function openEditDrawer(userId) {
 }
 
 function closeEditDrawer() {
+  if (saveInFlight) return;
   els.editDrawer.classList.add("hidden");
   editingUserId = null;
   managerPicker = { loaded: false, selected: null };
@@ -2355,27 +2403,44 @@ function applyUserPatch(userId, payload) {
   }
 }
 
-async function refreshAfterEdit() {
+async function refreshAfterEdit(editedUserId, expectedManagerId) {
+  const managerChanged = typeof expectedManagerId === "string";
+  if (managerChanged) {
+    invalidateChartCaches();
+    await waitForManagerMatch(editedUserId, expectedManagerId || null);
+  } else {
+    directReportCountCache.clear();
+    orgRootsCache = null;
+    orgRootsPromise = null;
+  }
+
+  const focusId = branchStack[branchStack.length - 1]?.id;
+  if (managerChanged && focusId) {
+    await waitForReportsToSettle(focusId, editedUserId, expectedManagerId || null);
+  }
+
+  if (focusId) {
+    const overrides = {};
+    if (managerChanged) overrides[editedUserId] = expectedManagerId || null;
+    try {
+      branchStack = await buildBranchTo(focusId, overrides);
+    } catch { /* keep the current branch */ }
+  }
+
   clearExtraCatalog();
   refreshOrgFilters();
   if (!els.adminUi.classList.contains("hidden")) renderAdminList(els.adminSearchInput.value);
-  if (!els.branchView.classList.contains("hidden")) {
-    if (lastEditChangedManager) {
-      const current = branchStack[branchStack.length - 1];
-      if (current) {
-        try {
-          branchStack = await buildBranchTo(current.id);
-        } catch { /* keep the current branch */ }
-      }
-    }
+  if (!els.fullTreeUi.classList.contains("hidden")) {
+    await loadFullOrg();
+    await renderFullTree();
+  } else if (!els.branchView.classList.contains("hidden")) {
     await renderTree();
   }
-  if (!els.fullTreeUi.classList.contains("hidden") && fullOrgPeople) await renderFullTree();
 }
 
 async function saveEdit(e) {
   e.preventDefault();
-  if (!editingUserId) return;
+  if (!editingUserId || saveInFlight) return;
 
   const companyName = selectedEditValue("company");
   const department = selectedEditValue("department");
@@ -2401,7 +2466,7 @@ async function saveEdit(e) {
     payload.managerId = managerPicker.selected?.id || "";
   }
 
-  els.btnEditSave.disabled = true;
+  setSaveBusy(true);
   els.editMessage.classList.add("hidden");
   try {
     if (demoMode) {
@@ -2455,14 +2520,15 @@ async function saveEdit(e) {
         els.editMessage.textContent = "Saved to Microsoft 365.";
       }
     }
-    await refreshAfterEdit();
+    const expectedManagerId = lastEditChangedManager ? (payload.managerId || "") : undefined;
+    await refreshAfterEdit(editingUserId, expectedManagerId);
   } catch (err) {
     lastEditChangedManager = false;
     els.editMessage.classList.remove("hidden");
     els.editMessage.classList.add("is-error");
     els.editMessage.textContent = err.message;
   } finally {
-    els.btnEditSave.disabled = false;
+    setSaveBusy(false);
   }
 }
 

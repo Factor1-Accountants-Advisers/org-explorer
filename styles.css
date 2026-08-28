@@ -97,6 +97,37 @@ button.primary:hover:not(:disabled) {
 
 button:disabled { opacity: 0.55; cursor: not-allowed; }
 
+.btn-save {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  min-width: 9.75rem;
+}
+
+.btn-save .btn-spinner {
+  display: none;
+  width: 0.9rem;
+  height: 0.9rem;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.65s linear infinite;
+  flex-shrink: 0;
+}
+
+.btn-save.is-saving .btn-spinner { display: block; }
+
+.btn-save.is-saving,
+.btn-save.is-saving:disabled {
+  opacity: 1;
+  cursor: progress;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 .toolbar {
   display: grid;
   grid-template-columns: 1fr minmax(8rem, 10rem) minmax(8rem, 10rem) minmax(8rem, 10rem);
