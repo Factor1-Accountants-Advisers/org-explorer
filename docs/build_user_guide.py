@@ -19,7 +19,7 @@ HEADER_FILL = "1F3864"
 PLACEHOLDER_FILL = "F3EBE4"
 TABLE_WIDTH = 9026
 
-OUT = Path(__file__).with_name("Org-Explorer_User-Guide_v1.1.docx")
+OUT = Path(__file__).with_name("Org-Explorer_User-Guide_v1.2.docx")
 
 
 def set_run_font(run, *, size=11, bold=False, color=BODY, name="Calibri"):
@@ -310,7 +310,7 @@ def build():
         doc,
         ["", ""],
         [
-            ["Version", "1.1"],
+            ["Version", "1.2"],
             ["Date", "28 August 2026"],
             ["Author", "David Ahlhaus"],
             ["Status", "Issued"],
@@ -406,9 +406,10 @@ def build():
     numbered(doc, [{"text": "Choose "}, {"text": "Employees", "bold": True}, {"text": " to see people, or "}, {"text": "Structure", "bold": True}, {"text": " to see company, then department, then team, then role."}])
     numbered(doc, "Drag to move around. Scroll to zoom.")
     numbered(doc, [{"text": "Choose "}, {"text": "Focus me", "bold": True}, {"text": " to jump to your own card."}])
-    numbered(doc, [{"text": "Choose "}, {"text": "Print", "bold": True}, {"text": " to print the view on screen."}])
+    numbered(doc, [{"text": "Choose "}, {"text": "Print", "bold": True}, {"text": ". The chart prints in landscape, with one branch per page so names stay readable. Each page names the branch. Set company, department, or team first if you only need part of the firm. In the print dialog you can Save as PDF."}])
+    numbered(doc, [{"text": "Choose "}, {"text": "Download SVG", "bold": True}, {"text": " to save the whole chart as a file you can open and zoom."}])
     numbered(doc, [{"text": "Choose "}, {"text": "Back to explorer", "bold": True}, {"text": " to return to the branch view."}])
-    placeholder(doc, "Full tree in Employees view, with Focus me, Print, and Back to explorer visible.")
+    placeholder(doc, "Full tree in Employees view, with Focus me, Print, Download SVG, and Back to explorer visible.")
 
     heading(doc, "10.2 Sign out", 2)
     runs(doc, ["Choose ", {"text": "Sign out", "bold": True}, {"text": " when you finish. Sign in again next time."}])
@@ -444,6 +445,7 @@ def build():
     bullet(doc, [{"text": "Reports to", "bold": True}, {"text": " is a person search. Use × if this person sits at the top of the org."}])
     bullet(doc, "Finish Add, or pick an existing value, before Save changes.")
     bullet(doc, [{"text": "Save changes", "bold": True}, {"text": " shows Saving… while Microsoft 365 stores the change and the chart updates."}])
+    bullet(doc, [{"text": "Print", "bold": True}, {"text": " on Full tree puts each branch on its own landscape page. "}, {"text": "Download SVG", "bold": True}, {"text": " saves the whole chart as a file you can zoom."}])
     bullet(doc, "When you apply a list, leave each person’s id unchanged.")
     bullet(doc, "A change you save in Org Explorer is the change Microsoft 365 keeps.")
 
@@ -503,6 +505,7 @@ def build():
         [
             ["1.0", "27 August 2026", "David Ahlhaus", "First issue. Covers sign-in, search, filters, branches, Full tree, and Admin updates."],
             ["1.1", "28 August 2026", "David Ahlhaus", "Added Reports to on Edit details, Saving… on Save changes, and Print on Full tree."],
+            ["1.2", "28 August 2026", "David Ahlhaus", "Print on Full tree now uses one landscape page per branch. Download SVG saves the whole chart as a file you can zoom."],
         ],
         [1400, 1800, 2200, 3626],
     )

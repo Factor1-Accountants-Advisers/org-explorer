@@ -1167,7 +1167,34 @@ img.avatar {
   margin-top: 0.2rem;
 }
 
+.ft-print-pages,
 .ft-print-banner { display: none; }
+
+.ft-print-page {
+  position: relative;
+}
+
+.ft-print-fit {
+  position: relative;
+  overflow: hidden;
+}
+
+.ft-print-stage {
+  position: relative;
+  transform-origin: 0 0;
+}
+
+.ft-print-stage .ft-svg,
+.ft-print-stage .ft-nodes {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
+.ft-print-empty {
+  font-size: 0.95rem;
+  color: var(--muted);
+}
 
 /* ── Print: full tree (employees & structure) ───────────────────────────── */
 @media print {
@@ -1199,7 +1226,8 @@ img.avatar {
   body.printing-ft #branch-view,
   body.printing-ft #admin-ui,
   body.printing-ft .ft-loading,
-  body.printing-ft .ft-hint {
+  body.printing-ft .ft-hint,
+  body.printing-ft .ft-panel {
     display: none !important;
   }
 
@@ -1219,6 +1247,22 @@ img.avatar {
     gap: 0;
   }
 
+  body.printing-ft .ft-print-pages {
+    display: block !important;
+  }
+
+  body.printing-ft .ft-print-page {
+    break-after: page;
+    page-break-after: always;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  body.printing-ft .ft-print-page:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+
   body.printing-ft .ft-print-banner {
     display: block;
     font-size: 11pt;
@@ -1227,31 +1271,8 @@ img.avatar {
     margin: 0 0 8px;
   }
 
-  body.printing-ft .ft-panel {
-    height: auto !important;
-    min-height: 0 !important;
-    overflow: visible;
-    border: none;
-    border-radius: 0;
-    box-shadow: none;
-    background: transparent;
-  }
-
-  body.printing-ft .ft-viewport {
-    overflow: hidden !important;
-    height: calc(var(--ft-print-h, 300) * var(--ft-print-scale, 1) * 1px) !important;
-    width: calc(var(--ft-print-w, 400) * var(--ft-print-scale, 1) * 1px) !important;
-    background: none;
-    cursor: default;
-  }
-
-  body.printing-ft .ft-stage {
-    position: relative;
-    left: 0;
-    top: 0;
-    transform: scale(var(--ft-print-scale, 1)) !important;
-    transform-origin: 0 0 !important;
-    will-change: auto;
+  body.printing-ft .ft-print-empty {
+    display: block;
   }
 
   body.printing-ft .ft-node {
@@ -1261,6 +1282,10 @@ img.avatar {
   }
 
   body.printing-ft .ft-svg path {
+    fill: none;
     stroke: #c9956a;
+    stroke-width: 1.75;
+    stroke-linecap: round;
+    stroke-linejoin: round;
   }
 }

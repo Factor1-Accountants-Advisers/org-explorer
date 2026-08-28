@@ -149,6 +149,7 @@ let ftDragStart = null;
 let ftFocusNodeId = null;
 let ftLayoutBounds = { width: 0, height: 0 };
 let ftPanZoomBound = false;
+let ftForest = [];
 
 const FT = {
   PERSON_W: 132,
@@ -165,6 +166,21 @@ const FT = {
   V_GAP: 88,
   MIN_SCALE: 0.18,
   MAX_SCALE: 2.4,
+  PRINT_PAGE_W: 980,
+  PRINT_PAGE_H: 640,
+};
+
+const COMPANY_TONE_COLORS = {
+  "company-factor1": { fill: "#fad4bc", stroke: "#e8a882", color: "#8c1515" },
+  "company-blue": { fill: "#d4e6f8", stroke: "#a8c8e8", color: "#1a4f8a" },
+  "company-dark-green": { fill: "#c5dfc9", stroke: "#8fbf9a", color: "#1a4d28" },
+  "company-light-green": { fill: "#e4f3d8", stroke: "#b5d99a", color: "#3d6b2e" },
+  "company-purple": { fill: "#eadcf3", stroke: "#c9a8de", color: "#5a3d7a" },
+  "company-teal": { fill: "#d8f0ef", stroke: "#9fd0cd", color: "#0f5c5c" },
+  "company-slate": { fill: "#e2e7ee", stroke: "#b8c2d0", color: "#3d4a5c" },
+  "company-rose": { fill: "#f3dce6", stroke: "#e0b0c4", color: "#7a3050" },
+  "company-amber": { fill: "#f5ebc8", stroke: "#e0d090", color: "#7a5a12" },
+  "company-cyan": { fill: "#d5f0f7", stroke: "#9fd5e5", color: "#155e75" },
 };
 
 const els = {
@@ -217,7 +233,8 @@ const els = {
   btnFtStructure: document.getElementById("btn-ft-structure"),
   btnFtFocus: document.getElementById("btn-ft-focus"),
   btnFtPrint: document.getElementById("btn-ft-print"),
-  ftPrintBanner: document.getElementById("ft-print-banner"),
+  btnFtSvg: document.getElementById("btn-ft-svg"),
+  ftPrintPages: document.getElementById("ft-print-pages"),
   ftViewport: document.getElementById("ft-viewport"),
   ftStage: document.getElementById("ft-stage"),
   ftSvg: document.getElementById("ft-svg"),
@@ -1552,6 +1569,7 @@ async function renderFullTree() {
   if (!people.length) {
     els.ftSvg.innerHTML = "";
     els.ftNodes.innerHTML = `<div class="empty-layer" style="position:absolute;left:50%;top:40%;transform:translate(-50%,-50%);max-width:320px">No people match the current filters</div>`;
+    ftForest = [];
     ftLayoutBounds = { width: 400, height: 300 };
     ftPan = { x: 0, y: 0, scale: 1 };
     applyFtTransform();
@@ -1568,6 +1586,7 @@ async function renderFullTree() {
   }
 
   const { nodes, edges } = flattenForest(forest);
+  ftForest = forest;
   ftLayoutBounds = measureForest(nodes);
   els.ftStage.style.width = `${ftLayoutBounds.width}px`;
   els.ftStage.style.height = `${ftLayoutBounds.height}px`;
@@ -1646,9 +1665,100 @@ async function focusMeInFullTree() {
   await renderFullTree();
 }
 
-function printFullTree() {
-  if (els.fullTreeUi.classList.contains("hidden")) return;
+function ftNodeTitle(node) {
+  if (node.kind === "person") return node.user?.displayName || "Employee";
+  return node.label || node.kind;
+}
 
+function cloneFtNode(node) {
+  const copy = {
+    id: node.id,
+    kind: node.kind,
+    user: node.user,
+    label: node.label,
+    count: node.count,
+    company: node.company,
+    width: node.width,
+    height: node.height,
+    subtreeWidth: node.subtreeWidth,
+    x: node.x,
+    y: node.y,
+    children: [],
+  };
+  copy.children = (node.children || []).map(cloneFtNode);
+  return copy;
+}
+
+function sliceFromRoots(roots) {
+  const clonedRoots = roots.map(cloneFtNode);
+  const { nodes, edges } = flattenForest(clonedRoots);
+  let minX = Infinity;
+  let minY = Infinity;
+  nodes.forEach((n) => {
+    minX = Math.min(minX, n.x);
+    minY = Math.min(minY, n.y);
+  });
+  if (!Number.isFinite(minX)) minX = 0;
+  if (!Number.isFinite(minY)) minY = 0;
+  nodes.forEach((n) => {
+    n.x -= minX;
+    n.y -= minY;
+  });
+  return { nodes, edges, bounds: measureForest(nodes) };
+}
+
+function paginateForest(forest, maxWidth) {
+  const pages = [];
+  const gap = FT.H_GAP * 2;
+
+  function pack(nodes, parent) {
+    if (!nodes.length) return;
+    const groups = [];
+    let current = [];
+    let currentW = 0;
+
+    const flush = () => {
+      if (!current.length) return;
+      groups.push(current);
+      current = [];
+      currentW = 0;
+    };
+
+    nodes.forEach((node) => {
+      if (node.subtreeWidth > maxWidth && node.children.length) {
+        flush();
+        pack(node.children, node);
+        return;
+      }
+      const w = node.subtreeWidth;
+      if (current.length && currentW + gap + w > maxWidth) flush();
+      current.push(node);
+      currentW = current.length === 1 ? w : currentW + gap + w;
+    });
+    flush();
+
+    groups.forEach((roots) => {
+      let title;
+      if (roots.length === 1) {
+        title = ftNodeTitle(roots[0]);
+      } else if (roots.length <= 3) {
+        title = roots.map(ftNodeTitle).join(", ");
+      } else {
+        title = `${roots.length} branches`;
+      }
+      pages.push({
+        roots,
+        title,
+        parentLabel: parent ? ftNodeTitle(parent) : null,
+      });
+    });
+  }
+
+  pack(forest, null);
+  return pages;
+}
+
+function ftPrintMeta() {
   const modeLabel = ftMode === "employees" ? "Employees" : "Structure";
   const filters = [companyFilter, departmentFilter, teamFilter].filter(Boolean);
   const when = new Date().toLocaleDateString(undefined, {
@@ -1656,33 +1766,71 @@ function printFullTree() {
     month: "short",
     day: "numeric",
   });
-  const filterText = filters.length ? ` · ${filters.join(" · ")}` : "";
-  els.ftPrintBanner.textContent = `Org Explorer · ${modeLabel}${filterText} · ${when}`;
+  return {
+    modeLabel,
+    when,
+    filterText: filters.length ? ` · ${filters.join(" · ")}` : "",
+  };
+}
 
-  const width = Math.max(ftLayoutBounds.width || 400, 1);
-  const height = Math.max(ftLayoutBounds.height || 300, 1);
-  // Landscape letter-ish printable area in CSS pixels, leaving room for the banner.
-  const pageW = 1050;
-  const pageH = 680;
-  const scale = Math.min(pageW / width, pageH / height, 1);
+function ftEdgesSvgMarkup(edges) {
+  return edges.map(({ from, to }) => {
+    const x1 = from.x + from.width / 2;
+    const y1 = from.y + from.height;
+    const x2 = to.x + to.width / 2;
+    const y2 = to.y;
+    return `<path d="${curvePath(x1, y1, x2, y2)}"></path>`;
+  }).join("");
+}
 
-  const root = document.documentElement;
-  root.style.setProperty("--ft-print-scale", String(scale));
-  root.style.setProperty("--ft-print-w", String(width));
-  root.style.setProperty("--ft-print-h", String(height));
+function renderFtPrintPage(page, index, total, meId, meta) {
+  const slice = sliceFromRoots(page.roots);
+  const width = Math.max(slice.bounds.width, 1);
+  const height = Math.max(slice.bounds.height, 1);
+  const scale = Math.min(FT.PRINT_PAGE_W / width, FT.PRINT_PAGE_H / height, 1);
+  const nodesHtml = ftMode === "employees"
+    ? slice.nodes.map((n) => ftPersonHtml(n, meId)).join("")
+    : slice.nodes.map((n) => ftStructureHtml(n)).join("");
+  const parentBit = page.parentLabel ? ` · under ${escapeHtml(page.parentLabel)}` : "";
+  const pageBit = total > 1 ? ` · ${index + 1} of ${total}` : "";
+  return `<section class="ft-print-page">
+    <div class="ft-print-banner">Org Explorer · ${escapeHtml(meta.modeLabel)} · ${escapeHtml(page.title)}${parentBit}${pageBit}${escapeHtml(meta.filterText)} · ${escapeHtml(meta.when)}</div>
+    <div class="ft-print-fit" style="width:${width * scale}px;height:${height * scale}px">
+      <div class="ft-print-stage" style="width:${width}px;height:${height}px;transform:scale(${scale})">
+        <svg class="ft-svg" width="${width}" height="${height}" style="width:${width}px;height:${height}px">${ftEdgesSvgMarkup(slice.edges)}</svg>
+        <div class="ft-nodes" style="width:${width}px;height:${height}px">${nodesHtml}</div>
+      </div>
+    </div>
+  </section>`;
+}
+
+function printFullTree() {
+  if (els.fullTreeUi.classList.contains("hidden")) return;
+
+  const meta = ftPrintMeta();
+  const meId = focusPersonId();
+  const pages = ftForest.length
+    ? paginateForest(ftForest, FT.PRINT_PAGE_W)
+    : [];
+
+  if (!pages.length) {
+    els.ftPrintPages.innerHTML = `<section class="ft-print-page"><div class="ft-print-banner">Org Explorer · ${escapeHtml(meta.modeLabel)} · ${escapeHtml(meta.when)}</div><p class="ft-print-empty">No people match the current filters.</p></section>`;
+  } else {
+    els.ftPrintPages.innerHTML = pages
+      .map((page, i) => renderFtPrintPage(page, i, pages.length, meId, meta))
+      .join("");
+  }
+
   document.body.classList.add("printing-ft");
-
   const prevTitle = document.title;
-  document.title = `Org Explorer — ${modeLabel}`;
+  document.title = `Org Explorer — ${meta.modeLabel}`;
 
   let cleaned = false;
   const cleanup = () => {
     if (cleaned) return;
     cleaned = true;
     document.body.classList.remove("printing-ft");
-    root.style.removeProperty("--ft-print-scale");
-    root.style.removeProperty("--ft-print-w");
-    root.style.removeProperty("--ft-print-h");
+    els.ftPrintPages.innerHTML = "";
     document.title = prevTitle;
     window.removeEventListener("afterprint", cleanup);
   };
@@ -1691,6 +1839,110 @@ function printFullTree() {
   requestAnimationFrame(() => {
     window.print();
   });
+}
+
+function fitSvgText(text, maxPx, fontSize) {
+  const s = String(text || "");
+  const maxChars = Math.max(4, Math.floor(maxPx / (fontSize * 0.56)));
+  if (s.length <= maxChars) return s;
+  return `${s.slice(0, maxChars - 1)}…`;
+}
+
+function ftExportNodeSvg(node, meId) {
+  const x = node.x;
+  const y = node.y;
+  const w = node.width;
+  const h = node.height;
+  const cx = x + w / 2;
+
+  if (node.kind === "person") {
+    const u = node.user;
+    const isMe = u.id === meId;
+    const fill = isMe ? "#fff8f2" : "#ffffff";
+    const stroke = isMe ? "#e35205" : "#ebe4dc";
+    const name = fitSvgText(u.displayName, w - 12, 11.5);
+    const title = fitSvgText(u.jobTitle || "—", w - 12, 10);
+    const ini = escapeHtml(initials(u));
+    return `<g>
+      <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="14" fill="${fill}" stroke="${stroke}" stroke-width="1.5"/>
+      <circle cx="${cx}" cy="${y + 18}" r="12" fill="#e8eef6"/>
+      <text x="${cx}" y="${y + 22}" text-anchor="middle" font-size="9" font-weight="650" fill="#5b6b82">${ini}</text>
+      <text x="${cx}" y="${y + 48}" text-anchor="middle" font-size="11.5" font-weight="650" fill="#1a2332">${escapeHtml(name)}</text>
+      <text x="${cx}" y="${y + 64}" text-anchor="middle" font-size="10" fill="#6b7a90">${escapeHtml(title)}</text>
+    </g>`;
+  }
+
+  const tone = node.kind === "company"
+    ? COMPANY_TONE_COLORS[companyBadgeClass(node.company || node.label)]
+    : null;
+  const defaults = {
+    company: { fill: "#fff8f2", stroke: "#f0c49a", color: "#1a2332" },
+    dept: { fill: "#f7f9fc", stroke: "#ebe4dc", color: "#1a2332" },
+    team: { fill: "#f9f4ea", stroke: "#e3d3b3", color: "#1a2332" },
+    job: { fill: "#ffffff", stroke: "#ebe4dc", color: "#1a2332" },
+  };
+  const colors = tone || defaults[node.kind] || defaults.job;
+  const main = node.kind === "job"
+    ? `${node.label} · ${node.count}`
+    : node.label;
+  const label = fitSvgText(main, w - 16, 12.5);
+  const count = node.kind === "job" ? "" : `${node.count} people`;
+  const countEl = count
+    ? `<text x="${cx}" y="${y + h / 2 + 12}" text-anchor="middle" font-size="10.5" font-weight="600" fill="#6b7a90">${escapeHtml(count)}</text>`
+    : "";
+  const labelY = count ? y + h / 2 - 4 : y + h / 2 + 4;
+  return `<g>
+    <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="14" fill="${colors.fill}" stroke="${colors.stroke}" stroke-width="1.5"/>
+    <text x="${cx}" y="${labelY}" text-anchor="middle" font-size="12.5" font-weight="650" fill="${colors.color}">${escapeHtml(label)}</text>
+    ${countEl}
+  </g>`;
+}
+
+function downloadFtSvg() {
+  if (els.fullTreeUi.classList.contains("hidden")) return;
+  if (!ftForest.length) {
+    setStatus("Nothing to export for the current filters.", true);
+    return;
+  }
+
+  const meId = focusPersonId();
+  const { nodes, edges } = flattenForest(ftForest);
+  const bounds = measureForest(nodes);
+  const meta = ftPrintMeta();
+  const headerH = 56;
+  const width = Math.max(bounds.width, 640);
+  const height = bounds.height + headerH;
+  const paths = edges.map(({ from, to }) => {
+    const x1 = from.x + from.width / 2;
+    const y1 = from.y + from.height + headerH;
+    const x2 = to.x + to.width / 2;
+    const y2 = to.y + headerH;
+    return `<path d="${curvePath(x1, y1, x2, y2)}" fill="none" stroke="#c9956a" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>`;
+  }).join("");
+  const shifted = nodes.map((n) => ({ ...n, y: n.y + headerH }));
+  const cards = shifted.map((n) => ftExportNodeSvg(n, meId)).join("");
+  const subtitle = [meta.modeLabel, meta.filterText.replace(/^ · /, ""), meta.when]
+    .filter(Boolean)
+    .join(" · ");
+  const svg = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" font-family="Segoe UI, system-ui, sans-serif">
+  <rect width="100%" height="100%" fill="#ffffff"/>
+  <text x="16" y="24" font-size="16" font-weight="650" fill="#1a2332">Org Explorer</text>
+  <text x="16" y="42" font-size="12" fill="#6b7a90">${escapeHtml(subtitle)}</text>
+  ${paths}
+  ${cards}
+</svg>`;
+
+  const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const stamp = new Date().toISOString().slice(0, 10);
+  a.href = url;
+  a.download = `org-explorer-${ftMode}-${stamp}.svg`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 function bindFtPanZoom() {
@@ -2615,6 +2867,7 @@ els.btnFtEmployees.addEventListener("click", () => setFtMode("employees"));
 els.btnFtStructure.addEventListener("click", () => setFtMode("structure"));
 els.btnFtFocus.addEventListener("click", () => focusMeInFullTree());
 els.btnFtPrint.addEventListener("click", () => printFullTree());
+els.btnFtSvg.addEventListener("click", () => downloadFtSvg());
 els.btnLive.addEventListener("click", async () => {
   try {
     await initAuth();
