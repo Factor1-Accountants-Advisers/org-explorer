@@ -1,6 +1,6 @@
 # Org Explorer
 
-Microsoft 365 org chart navigator for Factor1. Hierarchy is **Company → Department → Team → Role**. Team is stored in Exchange **CustomAttribute1** (`onPremisesExtensionAttributes.extensionAttribute1` in Graph). Embeddable in SharePoint via Vercel.
+Microsoft 365 org chart navigator for Factor1. Hierarchy is **Company → Department → Team → Role**. Reporting lines use the Microsoft 365 **manager** (**Reports to** in the edit panel). Team is stored in Exchange **CustomAttribute1** (`onPremisesExtensionAttributes.extensionAttribute1` in Graph). Embeddable in SharePoint via Vercel.
 
 Repo: [Factor1-Accountants-Advisers/org-explorer](https://github.com/Factor1-Accountants-Advisers/org-explorer)
 
@@ -35,7 +35,7 @@ Delegated (SPA, everyone):
 
 Application (server, admin writes only):
 
-- `User.ReadWrite.All`
+- `User.ReadWrite.All` (also used to set or clear a user’s manager)
 - `GroupMember.Read.All`
 - `Member.Read.Hidden` (admin consent; Microsoft 365 groups often hide members from app-only tokens)
 
@@ -59,6 +59,15 @@ Redirect URIs (SPA):
 ### Team / CustomAttribute1
 
 Graph can write `extensionAttribute1` only for **cloud-only** users (`onPremisesSyncEnabled` is false or null). Hybrid or Exchange-mastered mailboxes return an error in the edit drawer; those must be updated in Exchange. Confirm CustomAttribute1 is unused in the tenant before the first live save.
+
+### Reports to / manager
+
+The edit drawer’s **Reports to** field writes the Graph manager:
+
+- Set: `PUT /users/{id}/manager/$ref` with `@odata.id` pointing at the manager’s user
+- Clear (person sits at the top of the org): `DELETE /users/{id}/manager`
+
+After a successful save the app waits until Graph returns the new manager, then rebuilds the current branch so the chart matches. CSV apply writes company, department, team, and role.
 
 ## Deploy to Vercel
 
