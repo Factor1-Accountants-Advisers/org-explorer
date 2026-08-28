@@ -126,6 +126,10 @@ const departmentsByCompany = new Map();
 const teamsByCompanyDept = new Map();
 const knownRoles = new Set();
 let editingUserId = null;
+let managerPicker = { loaded: false, selected: null };
+let originalManagerId = "";
+let lastEditChangedManager = false;
+let managerSearchTimer = null;
 let searchTimer = null;
 let animDirection = null;
 let drawFrame = 0;
@@ -197,11 +201,20 @@ const els = {
   editTeam: document.getElementById("edit-team"),
   editRole: document.getElementById("edit-role"),
   editMessage: document.getElementById("edit-message"),
+  editManagerSelected: document.getElementById("edit-manager-selected"),
+  editManagerSearchWrap: document.getElementById("edit-manager-search-wrap"),
+  editManagerInput: document.getElementById("edit-manager-input"),
+  editManagerResults: document.getElementById("edit-manager-results"),
+  editManagerName: document.getElementById("edit-manager-name"),
+  editManagerMeta: document.getElementById("edit-manager-meta"),
+  btnClearManager: document.getElementById("btn-clear-manager"),
   btnEditSave: document.getElementById("btn-edit-save"),
   btnFtBack: document.getElementById("btn-ft-back"),
   btnFtEmployees: document.getElementById("btn-ft-employees"),
   btnFtStructure: document.getElementById("btn-ft-structure"),
   btnFtFocus: document.getElementById("btn-ft-focus"),
+  btnFtPrint: document.getElementById("btn-ft-print"),
+  ftPrintBanner: document.getElementById("ft-print-banner"),
   ftViewport: document.getElementById("ft-viewport"),
   ftStage: document.getElementById("ft-stage"),
   ftSvg: document.getElementById("ft-svg"),
@@ -1625,6 +1638,53 @@ async function focusMeInFullTree() {
   await renderFullTree();
 }
 
+function printFullTree() {
+  if (els.fullTreeUi.classList.contains("hidden")) return;
+
+  const modeLabel = ftMode === "employees" ? "Employees" : "Structure";
+  const filters = [companyFilter, departmentFilter, teamFilter].filter(Boolean);
+  const when = new Date().toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+  const filterText = filters.length ? ` · ${filters.join(" · ")}` : "";
+  els.ftPrintBanner.textContent = `Org Explorer · ${modeLabel}${filterText} · ${when}`;
+
+  const width = Math.max(ftLayoutBounds.width || 400, 1);
+  const height = Math.max(ftLayoutBounds.height || 300, 1);
+  // Landscape letter-ish printable area in CSS pixels, leaving room for the banner.
+  const pageW = 1050;
+  const pageH = 680;
+  const scale = Math.min(pageW / width, pageH / height, 1);
+
+  const root = document.documentElement;
+  root.style.setProperty("--ft-print-scale", String(scale));
+  root.style.setProperty("--ft-print-w", String(width));
+  root.style.setProperty("--ft-print-h", String(height));
+  document.body.classList.add("printing-ft");
+
+  const prevTitle = document.title;
+  document.title = `Org Explorer — ${modeLabel}`;
+
+  let cleaned = false;
+  const cleanup = () => {
+    if (cleaned) return;
+    cleaned = true;
+    document.body.classList.remove("printing-ft");
+    root.style.removeProperty("--ft-print-scale");
+    root.style.removeProperty("--ft-print-w");
+    root.style.removeProperty("--ft-print-h");
+    document.title = prevTitle;
+    window.removeEventListener("afterprint", cleanup);
+  };
+  window.addEventListener("afterprint", cleanup);
+
+  requestAnimationFrame(() => {
+    window.print();
+  });
+}
+
 function bindFtPanZoom() {
   if (ftPanZoomBound) return;
   ftPanZoomBound = true;
@@ -1873,7 +1933,7 @@ async function openAdmin() {
   if (hint) {
     hint.textContent = demoMode
       ? "Preview mode — edits stay in this browser session."
-      : "Pick company, department, team, and role from the lists. Use Add new value to create one.";
+      : "Pick company, department, team, role, and who they report to. Use Add new value to create a list item.";
   }
   try {
     await fetchDirectoryPeople();
@@ -2085,7 +2145,171 @@ function closeAdmin() {
   scheduleDrawLines();
 }
 
-function openEditDrawer(userId) {
+function managerMeta(user) {
+  return [user?.jobTitle, user?.department, user?.companyName].filter(Boolean).join(" · ");
+}
+
+function renderManagerPicker() {
+  const person = managerPicker.selected;
+  const has = !!person;
+  els.editManagerSelected.classList.toggle("hidden", !has);
+  els.editManagerSearchWrap.classList.toggle("hidden", has);
+  els.editManagerResults.classList.add("hidden");
+  if (has) {
+    els.editManagerName.textContent = person.displayName || "";
+    els.editManagerMeta.textContent = managerMeta(person);
+  } else {
+    els.editManagerInput.value = "";
+    els.editManagerInput.placeholder = "Search for a person…";
+  }
+}
+
+function clearManagerSelection() {
+  managerPicker.selected = null;
+  renderManagerPicker();
+  els.editManagerInput.focus();
+}
+
+async function wouldCreateReportingCycle(userId, managerId) {
+  if (!managerId || managerId === userId) return managerId === userId;
+  const seen = new Set();
+  let id = managerId;
+  while (id && !seen.has(id)) {
+    if (id === userId) return true;
+    seen.add(id);
+    if (demoMode) {
+      id = DEMO_USERS[id]?.managerId || null;
+    } else if (fullOrgManagerMap?.has(id)) {
+      id = fullOrgManagerMap.get(id) || null;
+    } else {
+      const mgr = await fetchManager(id);
+      id = mgr?.id || null;
+    }
+  }
+  return false;
+}
+
+async function selectManagerPerson(user) {
+  if (!user?.id || !editingUserId) return;
+  if (user.id === editingUserId) {
+    els.editMessage.classList.remove("hidden");
+    els.editMessage.classList.add("is-error");
+    els.editMessage.textContent = "A person cannot report to themselves.";
+    return;
+  }
+  if (await wouldCreateReportingCycle(editingUserId, user.id)) {
+    els.editMessage.classList.remove("hidden");
+    els.editMessage.classList.add("is-error");
+    els.editMessage.textContent = "That person already reports to this person, so the reporting line would loop.";
+    return;
+  }
+  els.editMessage.classList.add("hidden");
+  managerPicker.selected = user;
+  cacheUser(user);
+  renderManagerPicker();
+}
+
+async function searchManagerCandidates(query) {
+  const q = query.trim();
+  if (!q) return [];
+  const needle = q.toLowerCase();
+  const localSource = directoryPeople?.length ? directoryPeople : [...userCache.values()];
+  const seen = new Set();
+  const matches = [];
+  localSource.forEach((u) => {
+    if (!u?.id || u.id === editingUserId || seen.has(u.id)) return;
+    const hay = [u.displayName, u.mail, u.userPrincipalName, u.jobTitle]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    if (!hay.includes(needle)) return;
+    seen.add(u.id);
+    matches.push(u);
+  });
+  const remote = await graphSearch(q);
+  remote.forEach((u) => {
+    if (!u?.id || u.id === editingUserId || seen.has(u.id)) return;
+    seen.add(u.id);
+    matches.push(u);
+  });
+  return matches.slice(0, 12);
+}
+
+function runManagerSearch(query) {
+  clearTimeout(managerSearchTimer);
+  const q = (query || "").trim();
+  if (!q) {
+    els.editManagerResults.classList.add("hidden");
+    els.editManagerResults.innerHTML = "";
+    return;
+  }
+  managerSearchTimer = setTimeout(async () => {
+    const results = await searchManagerCandidates(q);
+    if (els.editManagerInput.value.trim() !== q) return;
+    if (!results.length) {
+      els.editManagerResults.innerHTML = `<div class="empty-layer" style="padding:0.75rem;max-width:none">No matches</div>`;
+    } else {
+      els.editManagerResults.innerHTML = results.map((u) => {
+        const meta = [u.jobTitle, u.companyName, u.department].filter(Boolean).map((s) => escapeHtml(s)).join(" · ");
+        return `
+        <button type="button" data-manager-id="${u.id}">
+          ${escapeHtml(u.displayName)}
+          <span class="sub">${meta}</span>
+        </button>
+      `;
+      }).join("");
+      els.editManagerResults.querySelectorAll("[data-manager-id]").forEach((btn) => {
+        btn.addEventListener("mousedown", (e) => {
+          e.preventDefault();
+          const person = results.find((u) => u.id === btn.dataset.managerId);
+          if (person) selectManagerPerson(person);
+        });
+      });
+    }
+    els.editManagerResults.classList.remove("hidden");
+  }, 220);
+}
+
+async function loadManagerIntoPicker(userId) {
+  managerPicker = { loaded: false, selected: null };
+  originalManagerId = "";
+  els.editManagerInput.disabled = true;
+  els.editManagerInput.placeholder = "Loading current manager…";
+  els.editManagerSelected.classList.add("hidden");
+  els.editManagerSearchWrap.classList.remove("hidden");
+  try {
+    const mgr = await fetchManager(userId);
+    if (editingUserId !== userId) return;
+    managerPicker.selected = mgr || null;
+    originalManagerId = mgr?.id || "";
+    managerPicker.loaded = true;
+  } catch {
+    if (editingUserId !== userId) return;
+    managerPicker.loaded = false;
+    managerPicker.selected = null;
+  } finally {
+    if (editingUserId === userId) {
+      els.editManagerInput.disabled = false;
+      els.editManagerInput.placeholder = "Search for a person…";
+      renderManagerPicker();
+    }
+  }
+}
+
+function applyManagerPatch(userId, managerId) {
+  const id = managerId || null;
+  if (demoMode && DEMO_USERS[userId]) {
+    DEMO_USERS[userId].managerId = id;
+  }
+  if (fullOrgManagerMap) {
+    fullOrgManagerMap.set(userId, id);
+  }
+  directReportCountCache.clear();
+  orgRootsCache = null;
+  orgRootsPromise = null;
+}
+
+async function openEditDrawer(userId) {
   const user = userCache.get(userId);
   if (!user) return;
   editingUserId = userId;
@@ -2097,11 +2321,17 @@ function openEditDrawer(userId) {
   els.editMessage.classList.remove("is-error");
   els.editMessage.textContent = "";
   els.editDrawer.classList.remove("hidden");
+  await loadManagerIntoPicker(userId);
 }
 
 function closeEditDrawer() {
   els.editDrawer.classList.add("hidden");
   editingUserId = null;
+  managerPicker = { loaded: false, selected: null };
+  originalManagerId = "";
+  clearTimeout(managerSearchTimer);
+  els.editManagerResults.classList.add("hidden");
+  els.editManagerResults.innerHTML = "";
 }
 
 function applyUserPatch(userId, payload) {
@@ -2129,7 +2359,17 @@ async function refreshAfterEdit() {
   clearExtraCatalog();
   refreshOrgFilters();
   if (!els.adminUi.classList.contains("hidden")) renderAdminList(els.adminSearchInput.value);
-  if (!els.branchView.classList.contains("hidden")) await renderTree();
+  if (!els.branchView.classList.contains("hidden")) {
+    if (lastEditChangedManager) {
+      const current = branchStack[branchStack.length - 1];
+      if (current) {
+        try {
+          branchStack = await buildBranchTo(current.id);
+        } catch { /* keep the current branch */ }
+      }
+    }
+    await renderTree();
+  }
   if (!els.fullTreeUi.classList.contains("hidden") && fullOrgPeople) await renderFullTree();
 }
 
@@ -2155,6 +2395,11 @@ async function saveEdit(e) {
     team,
     jobTitle,
   };
+  lastEditChangedManager = managerPicker.loaded
+    && (managerPicker.selected?.id || "") !== (originalManagerId || "");
+  if (lastEditChangedManager) {
+    payload.managerId = managerPicker.selected?.id || "";
+  }
 
   els.btnEditSave.disabled = true;
   els.editMessage.classList.add("hidden");
@@ -2168,6 +2413,10 @@ async function saveEdit(e) {
         raw.jobTitle = payload.jobTitle;
       }
       applyUserPatch(editingUserId, payload);
+      if (typeof payload.managerId === "string") {
+        applyManagerPatch(editingUserId, payload.managerId);
+        originalManagerId = payload.managerId || "";
+      }
       els.editMessage.classList.remove("hidden", "is-error");
       els.editMessage.textContent = "Saved in preview (not written to Microsoft 365).";
     } else {
@@ -2189,11 +2438,26 @@ async function saveEdit(e) {
         team: data.team || "",
         jobTitle: data.jobTitle || "",
       });
-      els.editMessage.classList.remove("hidden", "is-error");
-      els.editMessage.textContent = "Saved to Microsoft 365.";
+      if (typeof payload.managerId === "string" && !data.managerError) {
+        applyManagerPatch(editingUserId, data.managerId || payload.managerId);
+        originalManagerId = payload.managerId || "";
+      }
+      els.editMessage.classList.remove("hidden");
+      if (data.managerError || data.teamError) {
+        els.editMessage.classList.add("is-error");
+        const parts = [];
+        if (data.teamError) parts.push(`Team (CustomAttribute1) could not be updated: ${data.teamError}`);
+        if (data.managerError) parts.push(`Reports to could not be updated: ${data.managerError}`);
+        els.editMessage.textContent = `Saved other details. ${parts.join(" ")}`;
+        lastEditChangedManager = lastEditChangedManager && !data.managerError;
+      } else {
+        els.editMessage.classList.remove("is-error");
+        els.editMessage.textContent = "Saved to Microsoft 365.";
+      }
     }
     await refreshAfterEdit();
   } catch (err) {
+    lastEditChangedManager = false;
     els.editMessage.classList.remove("hidden");
     els.editMessage.classList.add("is-error");
     els.editMessage.textContent = err.message;
@@ -2272,10 +2536,19 @@ els.btnAdminCsv.addEventListener("click", () => downloadOrgCsv());
 els.btnAdminCsvApply.addEventListener("click", () => chooseAdminCsv());
 els.adminCsvFile.addEventListener("change", (e) => onAdminCsvChosen(e));
 Object.keys(EDIT_FIELDS).forEach((kind) => bindEditField(kind));
+els.btnClearManager.addEventListener("click", () => clearManagerSelection());
+els.editManagerInput.addEventListener("input", (e) => runManagerSearch(e.target.value));
+els.editManagerInput.addEventListener("focus", (e) => {
+  if (e.target.value.trim()) runManagerSearch(e.target.value);
+});
+els.editManagerInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") e.preventDefault();
+});
 els.btnFtBack.addEventListener("click", () => closeFullTree());
 els.btnFtEmployees.addEventListener("click", () => setFtMode("employees"));
 els.btnFtStructure.addEventListener("click", () => setFtMode("structure"));
 els.btnFtFocus.addEventListener("click", () => focusMeInFullTree());
+els.btnFtPrint.addEventListener("click", () => printFullTree());
 els.btnLive.addEventListener("click", async () => {
   try {
     await initAuth();
@@ -2291,6 +2564,13 @@ els.adminSearchInput.addEventListener("input", (e) => renderAdminList(e.target.v
 document.addEventListener("click", (e) => {
   if (!els.searchInput.contains(e.target) && !els.searchResults.contains(e.target)) {
     els.searchResults.classList.add("hidden");
+  }
+  if (
+    els.editManagerInput
+    && !els.editManagerInput.contains(e.target)
+    && !els.editManagerResults.contains(e.target)
+  ) {
+    els.editManagerResults.classList.add("hidden");
   }
 });
 
@@ -2323,7 +2603,19 @@ els.editDrawer.querySelectorAll("[data-drawer-close]").forEach((el) => {
   el.addEventListener("click", () => closeEditDrawer());
 });
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && !els.editDrawer.classList.contains("hidden")) closeEditDrawer();
+  if (e.key === "Escape" && !els.editDrawer.classList.contains("hidden")) {
+    if (!els.editManagerResults.classList.contains("hidden")) {
+      els.editManagerResults.classList.add("hidden");
+      return;
+    }
+    closeEditDrawer();
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "p") {
+    if (!els.fullTreeUi.classList.contains("hidden")) {
+      e.preventDefault();
+      printFullTree();
+    }
+  }
 });
 
 window.addEventListener("resize", () => {

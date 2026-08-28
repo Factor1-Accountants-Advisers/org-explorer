@@ -15,7 +15,7 @@ npm run preview
 - Demo data: http://localhost:8080/?demo=1
 - Live Entra sign-in: http://localhost:8080/
 
-Admin writes against Microsoft 365 need the API:
+Admin writes against Microsoft 365 need the API. Saving a person updates company, department, team, role, and the Microsoft 365 manager (Reports to).
 
 ```bash
 npm run dev

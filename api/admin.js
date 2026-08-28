@@ -235,6 +235,60 @@ async function patchDirectoryUser(token, userId, fields) {
   return { ok: false, userId, error: withExtAttrHint(message) };
 }
 
+async function assignManager(token, userId, managerId) {
+  if (managerId && normalizeGuid(userId) === normalizeGuid(managerId)) {
+    return { ok: false, error: "A person cannot report to themselves." };
+  }
+
+  if (!managerId) {
+    const { res, data } = await graphJson(token, `/users/${encodeURIComponent(userId)}/manager`, {
+      method: "DELETE",
+    });
+    if (res.ok || res.status === 204 || res.status === 404) return { ok: true };
+    return { ok: false, error: graphMessage(data, "Could not clear manager.") };
+  }
+
+  const { res, data } = await graphJson(token, `/users/${encodeURIComponent(userId)}/manager/$ref`, {
+    method: "PUT",
+    body: {
+      "@odata.id": `${GRAPH}/users/${managerId}`,
+    },
+  });
+  if (res.ok || res.status === 204) return { ok: true };
+  return { ok: false, error: graphMessage(data, "Could not set manager.") };
+}
+
+function hasOwn(obj, key) {
+  return Object.prototype.hasOwnProperty.call(obj, key);
+}
+
+function fieldsFromBody(item, userId) {
+  const fields = {
+    userId,
+    companyName: normalizeField(item.companyName),
+    department: normalizeField(item.department),
+    jobTitle: normalizeField(item.jobTitle),
+    team: normalizeField(item.team),
+  };
+  if (hasOwn(item, "managerId")) {
+    fields.managerId = normalizeField(item.managerId);
+  }
+  return fields;
+}
+
+async function applyUserUpdate(token, fields) {
+  const patched = await patchDirectoryUser(token, fields.userId, fields);
+  if (!patched.ok) return patched;
+  if (typeof fields.managerId !== "string") return patched;
+
+  const mgr = await assignManager(token, fields.userId, fields.managerId);
+  return {
+    ...patched,
+    managerId: fields.managerId || null,
+    ...(mgr.ok ? {} : { managerError: mgr.error }),
+  };
+}
+
 async function mapPool(items, limit, fn) {
   const results = new Array(items.length);
   let next = 0;
@@ -314,17 +368,7 @@ export default async function handler(req, res) {
         return;
       }
 
-      const companyName = normalizeField(body.companyName);
-      const department = normalizeField(body.department);
-      const jobTitle = normalizeField(body.jobTitle);
-      const team = normalizeField(body.team);
-
-      const patched = await patchDirectoryUser(appToken, userId, {
-        companyName,
-        department,
-        jobTitle,
-        team,
-      });
+      const patched = await applyUserUpdate(appToken, fieldsFromBody(body, userId));
       if (!patched.ok) {
         json(res, 400, { error: patched.error });
         return;
@@ -359,16 +403,10 @@ export default async function handler(req, res) {
           results.push({ userId: "", ok: false, error: "userId is required." });
           return;
         }
-        queued.push({
-          userId,
-          companyName: normalizeField(item.companyName),
-          department: normalizeField(item.department),
-          jobTitle: normalizeField(item.jobTitle),
-          team: normalizeField(item.team),
-        });
+        queued.push(fieldsFromBody(item, userId));
       });
 
-      const patched = await mapPool(queued, 5, (item) => patchDirectoryUser(appToken, item.userId, item));
+      const patched = await mapPool(queued, 5, (item) => applyUserUpdate(appToken, item));
       results.push(...patched);
 
       json(res, 200, { ok: true, results });

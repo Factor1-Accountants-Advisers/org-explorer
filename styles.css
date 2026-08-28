@@ -351,7 +351,7 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
   border-radius: var(--radius);
   background: linear-gradient(180deg, #ffffff 0%, #f7f9fc 100%);
   width: 100%;
-  height: 180px;
+  height: 190px;
   overflow: hidden;
   text-align: center;
   box-shadow: var(--shadow);
@@ -1071,9 +1071,165 @@ img.avatar {
   color: #b91c1c;
 }
 
+.people-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.people-chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.55rem 0.65rem 0.55rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: #fcfdfe;
+}
+
+.people-chip.hidden { display: none; }
+
+.people-chip-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  font-weight: 400;
+}
+
+.people-chip-text strong {
+  font-size: 0.9rem;
+  font-weight: 650;
+}
+
+.people-chip-text span {
+  font-size: 0.75rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.people-chip button {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 1.05rem;
+  line-height: 1;
+}
+
+.people-picker .search-wrap input {
+  width: 100%;
+}
+
+.people-picker .search-results {
+  z-index: 60;
+}
+
 .drawer-actions {
   display: flex;
   justify-content: flex-end;
   gap: 0.5rem;
   margin-top: 0.2rem;
+}
+
+.ft-print-banner { display: none; }
+
+/* ── Print: full tree (employees & structure) ───────────────────────────── */
+@media print {
+  @page {
+    size: landscape;
+    margin: 10mm;
+  }
+
+  html, body {
+    background: #fff !important;
+    color: var(--text);
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+
+  body.printing-ft {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  body.printing-ft header,
+  body.printing-ft .toolbar,
+  body.printing-ft .ft-toolbar,
+  body.printing-ft .demo-banner,
+  body.printing-ft .setup-note,
+  body.printing-ft .status,
+  body.printing-ft .drawer,
+  body.printing-ft #branch-view,
+  body.printing-ft #admin-ui,
+  body.printing-ft .ft-loading,
+  body.printing-ft .ft-hint {
+    display: none !important;
+  }
+
+  body.printing-ft .app {
+    max-width: none;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+  }
+
+  body.printing-ft #main-ui,
+  body.printing-ft .full-tree-ui {
+    display: block !important;
+  }
+
+  body.printing-ft .full-tree-ui {
+    gap: 0;
+  }
+
+  body.printing-ft .ft-print-banner {
+    display: block;
+    font-size: 11pt;
+    font-weight: 650;
+    color: #1a2332;
+    margin: 0 0 8px;
+  }
+
+  body.printing-ft .ft-panel {
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+  }
+
+  body.printing-ft .ft-viewport {
+    overflow: hidden !important;
+    height: calc(var(--ft-print-h, 300) * var(--ft-print-scale, 1) * 1px) !important;
+    width: calc(var(--ft-print-w, 400) * var(--ft-print-scale, 1) * 1px) !important;
+    background: none;
+    cursor: default;
+  }
+
+  body.printing-ft .ft-stage {
+    position: relative;
+    left: 0;
+    top: 0;
+    transform: scale(var(--ft-print-scale, 1)) !important;
+    transform-origin: 0 0 !important;
+    will-change: auto;
+  }
+
+  body.printing-ft .ft-node {
+    box-shadow: none;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  body.printing-ft .ft-svg path {
+    stroke: #c9956a;
+  }
 }

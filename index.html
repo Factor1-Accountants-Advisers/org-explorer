@@ -71,8 +71,10 @@
           <div class="ft-toolbar-right">
             <span class="ft-hint">Drag to pan · Scroll to zoom</span>
             <button id="btn-ft-focus" type="button">Focus me</button>
+            <button id="btn-ft-print" type="button">Print</button>
           </div>
         </div>
+        <div id="ft-print-banner" class="ft-print-banner"></div>
         <div class="ft-panel">
           <div id="ft-loading" class="ft-loading hidden">Loading org…</div>
           <div id="ft-viewport" class="ft-viewport">
@@ -90,7 +92,7 @@
           <button id="btn-admin-csv" type="button">Download CSV</button>
           <button id="btn-admin-csv-apply" type="button">Apply CSV</button>
           <input id="admin-csv-file" type="file" accept=".csv,text/csv" hidden />
-          <span class="admin-hint">Pick company, department, team, and role from the lists. Use Add new value to create one.</span>
+          <span class="admin-hint">Pick company, department, team, role, and who they report to. Use Add new value to create a list item.</span>
         </div>
         <div class="admin-panel">
           <div class="admin-search">
@@ -111,6 +113,23 @@
       </div>
       <p id="edit-drawer-person" class="drawer-person"></p>
       <form id="edit-form" class="drawer-form">
+        <div class="drawer-field">
+          <span>Reports to</span>
+          <div class="people-picker" id="edit-manager-picker">
+            <div id="edit-manager-selected" class="people-chip hidden">
+              <div class="people-chip-text">
+                <strong id="edit-manager-name"></strong>
+                <span id="edit-manager-meta"></span>
+              </div>
+              <button type="button" id="btn-clear-manager" aria-label="Clear reports to">×</button>
+            </div>
+            <div class="search-wrap" id="edit-manager-search-wrap">
+              <input id="edit-manager-input" type="search" placeholder="Search for a person…" autocomplete="off" aria-label="Reports to" />
+              <div id="edit-manager-results" class="search-results hidden"></div>
+            </div>
+          </div>
+          <small>The manager in Microsoft 365. Leave empty if this person sits at the top of the org.</small>
+        </div>
         <div class="drawer-field">
           <span>Company</span>
           <select id="edit-company" aria-label="Company"></select>
