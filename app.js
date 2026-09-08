@@ -140,6 +140,7 @@ let originalManagerId = "";
 let lastEditChangedManager = false;
 let saveInFlight = false;
 let managerSearchTimer = null;
+let editCloseTimer = null;
 let searchTimer = null;
 let animDirection = null;
 let drawFrame = 0;
@@ -2718,6 +2719,7 @@ function setSaveBusy(on) {
 async function openEditDrawer(userId) {
   const user = userCache.get(userId);
   if (!user) return;
+  clearTimeout(editCloseTimer);
   editingUserId = userId;
   fillEditSelects();
   els.editDrawerPerson.textContent = [user.displayName, user.userPrincipalName || user.mail]
@@ -2732,6 +2734,7 @@ async function openEditDrawer(userId) {
 
 function closeEditDrawer() {
   if (saveInFlight) return;
+  clearTimeout(editCloseTimer);
   els.editDrawer.classList.add("hidden");
   editingUserId = null;
   managerPicker = { loaded: false, selected: null };
@@ -2831,6 +2834,7 @@ async function saveEdit(e) {
 
   setSaveBusy(true);
   els.editMessage.classList.add("hidden");
+  let saved = false;
   try {
     if (demoMode) {
       const raw = DEMO_USERS[editingUserId];
@@ -2848,6 +2852,7 @@ async function saveEdit(e) {
       }
       els.editMessage.classList.remove("hidden", "is-error");
       els.editMessage.textContent = "Saved in preview (not written to Microsoft 365).";
+      saved = true;
     } else {
       const token = await getToken();
       if (!token) throw new Error("Sign in required.");
@@ -2884,6 +2889,7 @@ async function saveEdit(e) {
       } else {
         els.editMessage.classList.remove("is-error");
         els.editMessage.textContent = "Saved to Microsoft 365.";
+        saved = true;
       }
     }
     const expectedManagerId = lastEditChangedManager ? (payload.managerId || "") : undefined;
@@ -2895,6 +2901,15 @@ async function saveEdit(e) {
     els.editMessage.textContent = err.message;
   } finally {
     setSaveBusy(false);
+  }
+
+  // Let the person read the confirmation, then close for them.
+  if (saved) {
+    const savedUserId = editingUserId;
+    clearTimeout(editCloseTimer);
+    editCloseTimer = setTimeout(() => {
+      if (editingUserId === savedUserId) closeEditDrawer();
+    }, 2000);
   }
 }
 

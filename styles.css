@@ -17,6 +17,10 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* Scaled down from the browser default so the manager, current, and report rows
+   all fit above the fold on a 1080p screen. Sizes below are in rem so they follow. */
+html { font-size: 86%; }
+
 body {
   font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
   background:
@@ -51,8 +55,8 @@ header {
 }
 
 .header-logo {
-  width: 42px;
-  height: 42px;
+  width: 2.625rem;
+  height: 2.625rem;
   object-fit: contain;
   flex-shrink: 0;
 }
@@ -253,8 +257,8 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
 
 .tree-viewport {
   position: relative;
-  height: 760px;
-  min-height: 760px;
+  height: 49.75rem;
+  min-height: 49.75rem;
   padding: 0.25rem 0.5rem 0.5rem;
   overflow: hidden;
   display: flex;
@@ -364,13 +368,13 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
   display: flex;
   flex-direction: column;
   align-items: center;
-  width: 168px;
+  width: 10.5rem;
   position: relative;
 }
 
 .tree-node.current,
 .tree-node.manager,
-.tree-node.peer { width: 168px; }
+.tree-node.peer { width: 10.5rem; }
 
 .node-card {
   display: flex;
@@ -382,7 +386,7 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
   border-radius: var(--radius);
   background: linear-gradient(180deg, #ffffff 0%, #f7f9fc 100%);
   width: 100%;
-  height: 238px;
+  height: 14.875rem;
   overflow: hidden;
   text-align: center;
   box-shadow: var(--shadow);
@@ -417,12 +421,12 @@ button.node-card:hover {
 
 .avatar,
 img.avatar {
-  width: 48px;
-  height: 48px;
-  min-width: 48px;
-  min-height: 48px;
-  max-width: 48px;
-  max-height: 48px;
+  width: 3rem;
+  height: 3rem;
+  min-width: 3rem;
+  min-height: 3rem;
+  max-width: 3rem;
+  max-height: 3rem;
   border-radius: 50%;
   object-fit: cover;
   background: linear-gradient(145deg, #e8eef6, #d5deea);
@@ -614,7 +618,7 @@ img.avatar {
   .tree-node,
   .tree-node.current,
   .tree-node.manager,
-  .tree-node.peer { width: 146px; }
+  .tree-node.peer { width: 9.125rem; }
   .tree-row.manager-row { margin-bottom: 1.6rem; }
   .tree-row.current-row { margin-bottom: 1.9rem; }
   .tree-row.reports-row { gap: 0.75rem; }
