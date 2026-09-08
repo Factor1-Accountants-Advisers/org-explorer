@@ -187,15 +187,17 @@ async function graphPatchUser(token, userId, body) {
   });
 }
 
-function directoryPatchBody(fields, includeTeam) {
+function directoryPatchBody(fields, includeExtensionAttributes) {
   const patch = {
     companyName: fields.companyName || null,
     department: fields.department || null,
     jobTitle: fields.jobTitle || null,
   };
-  if (includeTeam) {
+  if (includeExtensionAttributes) {
+    // Graph replaces the whole object, so team and location must be sent together.
     patch.onPremisesExtensionAttributes = {
       extensionAttribute1: fields.team || null,
+      extensionAttribute2: fields.location || null,
     };
   }
   return patch;
@@ -203,7 +205,7 @@ function directoryPatchBody(fields, includeTeam) {
 
 function withExtAttrHint(message) {
   if (/extensionAttribute|onPremises|source of authority/i.test(message)) {
-    return `${message} Graph can only write CustomAttribute1 for cloud-only users. Hybrid or Exchange-mastered mailboxes must be updated in Exchange.`;
+    return `${message} Graph can only write CustomAttribute1 and CustomAttribute2 for cloud-only users. Hybrid or Exchange-mastered mailboxes must be updated in Exchange.`;
   }
   return message;
 }
@@ -215,6 +217,7 @@ async function patchDirectoryUser(token, userId, fields) {
     department: fields.department || null,
     jobTitle: fields.jobTitle || null,
     team: fields.team || null,
+    location: fields.location || null,
   };
 
   let res = await graphPatchUser(token, userId, directoryPatchBody(fields, true));
@@ -226,7 +229,8 @@ async function patchDirectoryUser(token, userId, fields) {
   if (/extensionAttribute|onPremises|source of authority/i.test(message)) {
     res = await graphPatchUser(token, userId, directoryPatchBody(fields, false));
     if (res.ok) {
-      return { ok: true, ...resultFields, teamError: withExtAttrHint(message) };
+      const hint = withExtAttrHint(message);
+      return { ok: true, ...resultFields, teamError: hint, locationError: hint };
     }
     const secondErr = await res.json().catch(() => ({}));
     message = graphMessage(secondErr, res.statusText);
@@ -269,6 +273,7 @@ function fieldsFromBody(item, userId) {
     department: normalizeField(item.department),
     jobTitle: normalizeField(item.jobTitle),
     team: normalizeField(item.team),
+    location: normalizeField(item.location),
   };
   if (hasOwn(item, "managerId")) {
     fields.managerId = normalizeField(item.managerId);

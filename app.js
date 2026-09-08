@@ -24,6 +24,7 @@ const DEMO_USERS = {
     jobTitle: "Chief Innovation Officer",
     department: "Innovation & Systems",
     team: "Innovation Leadership",
+    location: "Melbourne",
     companyName: "Factor1 Group",
     employeeType: "Melbourne",
     managerId: null,
@@ -37,6 +38,7 @@ const DEMO_USERS = {
     jobTitle: "Innovation and Systems Lead",
     department: "Innovation & Systems",
     team: "Systems",
+    location: "Melbourne",
     companyName: "Factor1 Group",
     employeeType: "Melbourne",
     managerId: "822b4129-2de9-4f18-a319-c336e8366bf4",
@@ -50,6 +52,7 @@ const DEMO_USERS = {
     jobTitle: "Systems Analyst",
     department: "Innovation & Systems",
     team: "Systems",
+    location: "Melbourne",
     companyName: "Factor1 Group",
     employeeType: "Melbourne",
     managerId: "05295543-6a39-479c-a5d9-6fc9db95e1ed",
@@ -63,6 +66,7 @@ const DEMO_USERS = {
     jobTitle: "Automation Specialist",
     department: "Innovation & Systems",
     team: "Automation",
+    location: "Brisbane",
     companyName: "Factor1 Group",
     employeeType: "Brisbane",
     managerId: "05295543-6a39-479c-a5d9-6fc9db95e1ed",
@@ -76,6 +80,7 @@ const DEMO_USERS = {
     jobTitle: "Data Engineer",
     department: "Innovation & Systems",
     team: "Data",
+    location: "Brisbane",
     companyName: "Factor1 Group",
     employeeType: "Melbourne",
     managerId: "05295543-6a39-479c-a5d9-6fc9db95e1ed",
@@ -89,6 +94,7 @@ const DEMO_USERS = {
     jobTitle: "HR Business Partner",
     department: "People & Culture",
     team: "People Partners",
+    location: "Melbourne",
     companyName: "Factor1 Group",
     employeeType: "Melbourne",
     managerId: "822b4129-2de9-4f18-a319-c336e8366bf4",
@@ -102,6 +108,7 @@ const DEMO_USERS = {
     jobTitle: "Managing Director",
     department: "Firm Management",
     team: "Firm Office",
+    location: "Melbourne",
     companyName: "Factor1 Group",
     employeeType: "Melbourne",
     managerId: null,
@@ -121,9 +128,11 @@ let isAdmin = false;
 let companyFilter = "";
 let departmentFilter = "";
 let teamFilter = "";
+let locationFilter = "";
 let knownCompanies = new Set();
 const departmentsByCompany = new Map();
 const teamsByCompanyDept = new Map();
+const locationsByCompanyDeptTeam = new Map();
 const knownRoles = new Set();
 let editingUserId = null;
 let managerPicker = { loaded: false, selected: null };
@@ -153,7 +162,7 @@ let ftForest = [];
 
 const FT = {
   PERSON_W: 132,
-  PERSON_H: 78,
+  PERSON_H: 92,
   COMPANY_W: 170,
   COMPANY_H: 56,
   DEPT_W: 150,
@@ -197,6 +206,7 @@ const els = {
   companyFilter: document.getElementById("company-filter"),
   deptFilter: document.getElementById("dept-filter"),
   teamFilter: document.getElementById("team-filter"),
+  locationFilter: document.getElementById("location-filter"),
   setupNote: document.getElementById("setup-note"),
   btnSignIn: document.getElementById("btn-signin"),
   btnSignOut: document.getElementById("btn-signout"),
@@ -216,6 +226,7 @@ const els = {
   editCompany: document.getElementById("edit-company"),
   editDepartment: document.getElementById("edit-department"),
   editTeam: document.getElementById("edit-team"),
+  editLocation: document.getElementById("edit-location"),
   editRole: document.getElementById("edit-role"),
   editMessage: document.getElementById("edit-message"),
   editManagerSelected: document.getElementById("edit-manager-selected"),
@@ -358,23 +369,40 @@ function userTeam(user) {
   return user?.onPremisesExtensionAttributes?.extensionAttribute1?.trim() || "";
 }
 
+function userLocation(user) {
+  if (user?.location?.trim()) return user.location.trim();
+  return user?.onPremisesExtensionAttributes?.extensionAttribute2?.trim() || "";
+}
+
 function orgKey(company, dept) {
   return `${company || ""}\0${dept || ""}`;
+}
+
+function orgTeamKey(company, dept, team) {
+  return `${company || ""}\0${dept || ""}\0${team || ""}`;
 }
 
 function cacheUser(user) {
   if (!user?.id) return;
   const team = userTeam(user);
   if (team) user.team = team;
+  const location = userLocation(user);
+  if (location) user.location = location;
   userCache.set(user.id, user);
 }
 
 function rememberOrgFields(user) {
   const team = userTeam(user);
+  const location = userLocation(user);
   const company = user.companyName?.trim();
   const dept = user.department?.trim();
   const role = user.jobTitle?.trim();
   if (role) knownRoles.add(role);
+  if (location) {
+    const locKey = orgTeamKey(company, dept, team);
+    if (!locationsByCompanyDeptTeam.has(locKey)) locationsByCompanyDeptTeam.set(locKey, new Set());
+    locationsByCompanyDeptTeam.get(locKey).add(location);
+  }
   if (company) {
     knownCompanies.add(company);
     if (!departmentsByCompany.has(company)) departmentsByCompany.set(company, new Set());
@@ -391,6 +419,7 @@ function rebuildOrgCatalogs() {
   knownCompanies = new Set();
   departmentsByCompany.clear();
   teamsByCompanyDept.clear();
+  locationsByCompanyDeptTeam.clear();
   knownRoles.clear();
   userCache.forEach(rememberOrgFields);
 }
@@ -506,7 +535,8 @@ function orgTagsHtml(user) {
   const company = user.companyName?.trim();
   const dept = user.department?.trim();
   const team = userTeam(user);
-  if (!company && !dept && !team) return "";
+  const location = userLocation(user);
+  if (!company && !dept && !team && !location) return "";
   const tags = [];
   if (company) {
     const tone = companyBadgeClass(company);
@@ -514,6 +544,7 @@ function orgTagsHtml(user) {
   }
   if (dept) tags.push(`<span class="node-tag node-dept">${escapeHtml(dept)}</span>`);
   if (team) tags.push(`<span class="node-tag node-team">${escapeHtml(team)}</span>`);
+  if (location) tags.push(`<span class="node-tag node-location">${escapeHtml(location)}</span>`);
   return `<div class="node-tags">${tags.join("")}</div>`;
 }
 
@@ -712,9 +743,11 @@ function orgMatches(user) {
   const company = (user.companyName || "").trim();
   const dept = (user.department || "").trim();
   const team = userTeam(user);
+  const location = userLocation(user);
   if (companyFilter && company !== companyFilter) return false;
   if (departmentFilter && dept !== departmentFilter) return false;
   if (teamFilter && team !== teamFilter) return false;
+  if (locationFilter && location !== locationFilter) return false;
   return true;
 }
 
@@ -739,6 +772,18 @@ function teamsForFilters() {
     if (companyFilter && company !== companyFilter) return;
     if (departmentFilter && dept !== departmentFilter) return;
     teams.forEach((t) => all.add(t));
+  });
+  return [...all].sort((a, b) => a.localeCompare(b));
+}
+
+function locationsForFilters(company = companyFilter, dept = departmentFilter, team = teamFilter) {
+  const all = new Set();
+  locationsByCompanyDeptTeam.forEach((locations, key) => {
+    const [keyCompany, keyDept, keyTeam] = key.split("\0");
+    if (company && keyCompany !== company) return;
+    if (dept && keyDept !== dept) return;
+    if (team && keyTeam !== team) return;
+    locations.forEach((l) => all.add(l));
   });
   return [...all].sort((a, b) => a.localeCompare(b));
 }
@@ -782,11 +827,25 @@ function refreshTeamDropdown() {
   }
 }
 
+function refreshLocationDropdown() {
+  const current = els.locationFilter.value;
+  const locations = locationsForFilters();
+  els.locationFilter.innerHTML = `<option value="">All locations</option>` +
+    locations.map((l) => `<option value="${escapeHtml(l)}">${escapeHtml(l)}</option>`).join("");
+  if (current && locations.includes(current)) {
+    els.locationFilter.value = current;
+  } else {
+    els.locationFilter.value = "";
+    locationFilter = "";
+  }
+}
+
 function refreshOrgFilters() {
   rebuildOrgCatalogs();
   refreshCompanyDropdown();
   refreshDeptDropdown();
   refreshTeamDropdown();
+  refreshLocationDropdown();
 }
 
 // ── UI helpers ──────────────────────────────────────────────────────────────
@@ -984,7 +1043,7 @@ async function renderTree() {
 
   const parts = [];
   const showManager = !!(manager?.id && orgMatches(manager));
-  const filterActive = companyFilter || departmentFilter || teamFilter;
+  const filterActive = companyFilter || departmentFilter || teamFilter || locationFilter;
   const atOrgTop = !manager;
 
   let topPeers = [];
@@ -1262,7 +1321,7 @@ async function loadFullOrg() {
 
 function filteredFullOrgPeople() {
   const people = fullOrgPeople || [];
-  if (!companyFilter && !departmentFilter && !teamFilter) return people;
+  if (!companyFilter && !departmentFilter && !teamFilter && !locationFilter) return people;
   return people.filter(orgMatches);
 }
 
@@ -1494,10 +1553,12 @@ function ftPersonHtml(node, meId) {
   const avatar = photo
     ? `<img class="ft-avatar" src="${photo}" alt="" />`
     : `<div class="ft-avatar">${escapeHtml(initials(u))}</div>`;
+  const location = userLocation(u);
   return `<div class="ft-node ft-person${isMe ? " is-me" : ""}" data-ft-id="${escapeHtml(u.id)}" style="left:${node.x}px;top:${node.y}px;width:${node.width}px;height:${node.height}px">
     ${avatar}
     <span class="ft-name">${escapeHtml(u.displayName)}</span>
     <span class="ft-title">${escapeHtml(u.jobTitle || "—")}</span>
+    <span class="ft-location">${escapeHtml(location || "—")}</span>
   </div>`;
 }
 
@@ -1760,7 +1821,7 @@ function paginateForest(forest, maxWidth) {
 
 function ftPrintMeta() {
   const modeLabel = ftMode === "employees" ? "Employees" : "Structure";
-  const filters = [companyFilter, departmentFilter, teamFilter].filter(Boolean);
+  const filters = [companyFilter, departmentFilter, teamFilter, locationFilter].filter(Boolean);
   const when = new Date().toLocaleDateString(undefined, {
     year: "numeric",
     month: "short",
@@ -1862,6 +1923,7 @@ function ftExportNodeSvg(node, meId) {
     const stroke = isMe ? "#e35205" : "#ebe4dc";
     const name = fitSvgText(u.displayName, w - 12, 11.5);
     const title = fitSvgText(u.jobTitle || "—", w - 12, 10);
+    const location = fitSvgText(userLocation(u) || "—", w - 12, 10);
     const ini = escapeHtml(initials(u));
     return `<g>
       <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="14" fill="${fill}" stroke="${stroke}" stroke-width="1.5"/>
@@ -1869,6 +1931,7 @@ function ftExportNodeSvg(node, meId) {
       <text x="${cx}" y="${y + 22}" text-anchor="middle" font-size="9" font-weight="650" fill="#5b6b82">${ini}</text>
       <text x="${cx}" y="${y + 48}" text-anchor="middle" font-size="11.5" font-weight="650" fill="#1a2332">${escapeHtml(name)}</text>
       <text x="${cx}" y="${y + 64}" text-anchor="middle" font-size="10" fill="#6b7a90">${escapeHtml(title)}</text>
+      <text x="${cx}" y="${y + 79}" text-anchor="middle" font-size="10" fill="#6b7a90">${escapeHtml(location)}</text>
     </g>`;
   }
 
@@ -2001,7 +2064,7 @@ function showExplorerChrome() {
 
 // ── Admin ───────────────────────────────────────────────────────────────────
 function personMeta(user) {
-  return [user.jobTitle, user.companyName, user.department, userTeam(user)]
+  return [user.jobTitle, user.companyName, user.department, userTeam(user), userLocation(user)]
     .filter(Boolean)
     .map((s) => escapeHtml(s))
     .join(" · ");
@@ -2011,6 +2074,7 @@ const extraCatalog = {
   company: new Set(),
   department: new Set(),
   team: new Set(),
+  location: new Set(),
   role: new Set(),
 };
 
@@ -2048,6 +2112,15 @@ const EDIT_FIELDS = {
     payload: "team",
     fromUser: (u) => userTeam(u),
   },
+  location: {
+    selectId: "edit-location",
+    wrapId: "new-location-wrap",
+    inputId: "new-location",
+    addId: "btn-add-location",
+    catalog: "location",
+    payload: "location",
+    fromUser: (u) => userLocation(u),
+  },
   role: {
     selectId: "edit-role",
     wrapId: "new-role-wrap",
@@ -2059,6 +2132,13 @@ const EDIT_FIELDS = {
   },
 };
 
+// The value shown in an edit select right now, ignoring the "Add new value…" row.
+function currentEditValue(kind) {
+  const select = document.getElementById(EDIT_FIELDS[kind].selectId);
+  if (!select || select.value === ADD_NEW) return "";
+  return select.value.trim();
+}
+
 function catalogValues(kind) {
   rebuildOrgCatalogs();
   const values = new Set(extraCatalog[kind]);
@@ -2069,6 +2149,17 @@ function catalogValues(kind) {
   }
   if (kind === "team") {
     teamsByCompanyDept.forEach((set) => set.forEach((v) => values.add(v)));
+  }
+  if (kind === "location") {
+    // Location follows the company, department, and team picked in the drawer.
+    const scoped = locationsForFilters(
+      currentEditValue("company"),
+      currentEditValue("department"),
+      currentEditValue("team")
+    );
+    const pool = scoped.length ? scoped : locationsForFilters("", "", "");
+    pool.forEach((v) => values.add(v));
+    return [...values].sort((a, b) => a.localeCompare(b));
   }
   userCache.forEach((u) => {
     const value = EDIT_FIELDS[kind].fromUser(u);
@@ -2103,11 +2194,21 @@ function toggleNewValueRow(kind, on) {
   }
 }
 
+// Keep the location list in step with the company, department, and team above it.
+const LOCATION_PARENT_FIELDS = ["company", "department", "team"];
+
+// Rescope the options, but keep whatever is already picked: moving someone to a new
+// team should not silently blank the location they still work from.
+function refreshEditLocationOptions() {
+  fillEditSelect("location", currentEditValue("location"));
+}
+
 function bindEditField(kind) {
   const field = EDIT_FIELDS[kind];
   const select = document.getElementById(field.selectId);
   select.addEventListener("change", () => {
     toggleNewValueRow(kind, select.value === ADD_NEW);
+    if (LOCATION_PARENT_FIELDS.includes(kind)) refreshEditLocationOptions();
   });
   document.getElementById(field.addId).addEventListener("click", () => addCatalogValue(kind));
   document.getElementById(field.inputId).addEventListener("keydown", (e) => {
@@ -2143,6 +2244,7 @@ function fillEditSelects() {
   fillEditSelect("company", user ? EDIT_FIELDS.company.fromUser(user) : "");
   fillEditSelect("department", user ? EDIT_FIELDS.department.fromUser(user) : "");
   fillEditSelect("team", user ? EDIT_FIELDS.team.fromUser(user) : "");
+  fillEditSelect("location", user ? EDIT_FIELDS.location.fromUser(user) : "");
   fillEditSelect("role", user ? EDIT_FIELDS.role.fromUser(user) : "");
 }
 
@@ -2162,6 +2264,7 @@ function renderAdminList(query) {
       || (u.companyName || "").toLowerCase().includes(q)
       || (u.department || "").toLowerCase().includes(q)
       || userTeam(u).toLowerCase().includes(q)
+      || userLocation(u).toLowerCase().includes(q)
     );
   }
   if (!people.length) {
@@ -2193,7 +2296,7 @@ async function openAdmin() {
   if (hint) {
     hint.textContent = demoMode
       ? "Preview mode — edits stay in this browser session."
-      : "Pick company, department, team, role, and who they report to. Use Add new value to create a list item.";
+      : "Pick company, department, team, location, role, and who they report to. Use Add new value to create a list item.";
   }
   try {
     await fetchDirectoryPeople();
@@ -2208,7 +2311,7 @@ function csvEscape(value) {
 }
 
 function orgUsersCsv(people) {
-  const header = ["id", "displayName", "userPrincipalName", "mail", "companyName", "department", "team", "jobTitle"];
+  const header = ["id", "displayName", "userPrincipalName", "mail", "companyName", "department", "team", "location", "jobTitle"];
   const rows = people.map((u) => [
     u.id,
     u.displayName,
@@ -2217,6 +2320,7 @@ function orgUsersCsv(people) {
     u.companyName,
     u.department,
     userTeam(u),
+    userLocation(u),
     u.jobTitle,
   ].map(csvEscape).join(","));
   return [header.join(","), ...rows].join("\r\n");
@@ -2295,15 +2399,17 @@ function updatesFromCsv(text) {
   const companyCol = col("companyName");
   const deptCol = col("department");
   const teamCol = col("team");
+  const locationCol = col("location");
   const titleCol = col("jobTitle");
-  if (companyCol < 0 || deptCol < 0 || teamCol < 0 || titleCol < 0) {
-    throw new Error("CSV must include companyName, department, team, and jobTitle columns.");
+  if (companyCol < 0 || deptCol < 0 || teamCol < 0 || locationCol < 0 || titleCol < 0) {
+    throw new Error("CSV must include companyName, department, team, location, and jobTitle columns.");
   }
   return rows.slice(1).map((row) => ({
     userId: (row[idCol] || "").trim(),
     companyName: companyCol >= 0 ? (row[companyCol] || "").trim() : "",
     department: deptCol >= 0 ? (row[deptCol] || "").trim() : "",
     team: teamCol >= 0 ? (row[teamCol] || "").trim() : "",
+    location: locationCol >= 0 ? (row[locationCol] || "").trim() : "",
     jobTitle: titleCol >= 0 ? (row[titleCol] || "").trim() : "",
   })).filter((item) => item.userId);
 }
@@ -2316,6 +2422,7 @@ async function postAdminUpdates(updates) {
         raw.companyName = item.companyName;
         raw.department = item.department;
         raw.team = item.team;
+        raw.location = item.location;
         raw.jobTitle = item.jobTitle;
       }
       applyUserPatch(item.userId, item);
@@ -2371,12 +2478,12 @@ async function onAdminCsvChosen(e) {
     const updates = updatesFromCsv(await file.text());
     if (!updates.length) throw new Error("No people found in that CSV.");
     const ok = window.confirm(demoMode
-      ? `Apply company, department, team, and role for ${updates.length} people in this preview session?`
-      : `Write company, department, team, and role for ${updates.length} people to Microsoft 365?`);
+      ? `Apply company, department, team, location, and role for ${updates.length} people in this preview session?`
+      : `Write company, department, team, location, and role for ${updates.length} people to Microsoft 365?`);
     if (!ok) return;
     const results = await applyCsvUpdates(updates);
     const failed = results.filter((item) => !item.ok);
-    const teamIssues = results.filter((item) => item.ok && item.teamError);
+    const teamIssues = results.filter((item) => item.ok && (item.teamError || item.locationError));
     if (failed.length) {
       const reasons = [...new Set(failed.map((item) => item.error).filter(Boolean))].slice(0, 2);
       setStatus(
@@ -2385,7 +2492,7 @@ async function onAdminCsvChosen(e) {
       );
       console.warn("CSV apply failures", failed.slice(0, 10));
     } else if (teamIssues.length) {
-      setStatus(`Updated ${results.length} people. Team (CustomAttribute1) failed for ${teamIssues.length} hybrid/Exchange-mastered mailboxes.`);
+      setStatus(`Updated ${results.length} people. Team and location (CustomAttribute1/2) failed for ${teamIssues.length} hybrid/Exchange-mastered mailboxes.`);
     } else {
       setStatus(`Updated ${results.length} people in Microsoft 365.`);
     }
@@ -2640,9 +2747,11 @@ function applyUserPatch(userId, payload) {
     user.companyName = payload.companyName;
     user.department = payload.department;
     user.team = payload.team;
+    user.location = payload.location;
     user.jobTitle = payload.jobTitle;
     if (!user.onPremisesExtensionAttributes) user.onPremisesExtensionAttributes = {};
     user.onPremisesExtensionAttributes.extensionAttribute1 = payload.team || null;
+    user.onPremisesExtensionAttributes.extensionAttribute2 = payload.location || null;
     cacheUser(user);
   };
 
@@ -2697,8 +2806,9 @@ async function saveEdit(e) {
   const companyName = selectedEditValue("company");
   const department = selectedEditValue("department");
   const team = selectedEditValue("team");
+  const location = selectedEditValue("location");
   const jobTitle = selectedEditValue("role");
-  if (companyName == null || department == null || team == null || jobTitle == null) {
+  if (companyName == null || department == null || team == null || location == null || jobTitle == null) {
     els.editMessage.classList.remove("hidden");
     els.editMessage.classList.add("is-error");
     els.editMessage.textContent = "Finish adding the new value, or pick an existing one.";
@@ -2710,6 +2820,7 @@ async function saveEdit(e) {
     companyName,
     department,
     team,
+    location,
     jobTitle,
   };
   lastEditChangedManager = managerPicker.loaded
@@ -2727,6 +2838,7 @@ async function saveEdit(e) {
         raw.companyName = payload.companyName;
         raw.department = payload.department;
         raw.team = payload.team;
+        raw.location = payload.location;
         raw.jobTitle = payload.jobTitle;
       }
       applyUserPatch(editingUserId, payload);
@@ -2753,6 +2865,7 @@ async function saveEdit(e) {
         companyName: data.companyName || "",
         department: data.department || "",
         team: data.team || "",
+        location: data.location || "",
         jobTitle: data.jobTitle || "",
       });
       if (typeof payload.managerId === "string" && !data.managerError) {
@@ -2760,10 +2873,11 @@ async function saveEdit(e) {
         originalManagerId = payload.managerId || "";
       }
       els.editMessage.classList.remove("hidden");
-      if (data.managerError || data.teamError) {
+      if (data.managerError || data.teamError || data.locationError) {
         els.editMessage.classList.add("is-error");
         const parts = [];
         if (data.teamError) parts.push(`Team (CustomAttribute1) could not be updated: ${data.teamError}`);
+        if (data.locationError) parts.push(`Location (CustomAttribute2) could not be updated: ${data.locationError}`);
         if (data.managerError) parts.push(`Reports to could not be updated: ${data.managerError}`);
         els.editMessage.textContent = `Saved other details. ${parts.join(" ")}`;
         lastEditChangedManager = lastEditChangedManager && !data.managerError;
@@ -2897,6 +3011,7 @@ els.companyFilter.addEventListener("change", (e) => {
   companyFilter = e.target.value;
   refreshDeptDropdown();
   refreshTeamDropdown();
+  refreshLocationDropdown();
   renderTree();
   if (!els.fullTreeUi.classList.contains("hidden") && fullOrgPeople) renderFullTree();
   if (els.searchInput.value.trim()) runSearch(els.searchInput.value);
@@ -2905,6 +3020,7 @@ els.companyFilter.addEventListener("change", (e) => {
 els.deptFilter.addEventListener("change", (e) => {
   departmentFilter = e.target.value;
   refreshTeamDropdown();
+  refreshLocationDropdown();
   renderTree();
   if (!els.fullTreeUi.classList.contains("hidden") && fullOrgPeople) renderFullTree();
   if (els.searchInput.value.trim()) runSearch(els.searchInput.value);
@@ -2912,6 +3028,14 @@ els.deptFilter.addEventListener("change", (e) => {
 
 els.teamFilter.addEventListener("change", (e) => {
   teamFilter = e.target.value;
+  refreshLocationDropdown();
+  renderTree();
+  if (!els.fullTreeUi.classList.contains("hidden") && fullOrgPeople) renderFullTree();
+  if (els.searchInput.value.trim()) runSearch(els.searchInput.value);
+});
+
+els.locationFilter.addEventListener("change", (e) => {
+  locationFilter = e.target.value;
   renderTree();
   if (!els.fullTreeUi.classList.contains("hidden") && fullOrgPeople) renderFullTree();
   if (els.searchInput.value.trim()) runSearch(els.searchInput.value);

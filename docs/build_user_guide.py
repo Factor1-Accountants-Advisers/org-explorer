@@ -19,7 +19,7 @@ HEADER_FILL = "1F3864"
 PLACEHOLDER_FILL = "F3EBE4"
 TABLE_WIDTH = 9026
 
-OUT = Path(__file__).with_name("Org-Explorer_User-Guide_v1.2.docx")
+OUT = Path(__file__).with_name("Org-Explorer_User-Guide_v1.3.docx")
 
 
 def set_run_font(run, *, size=11, bold=False, color=BODY, name="Calibri"):
@@ -310,8 +310,8 @@ def build():
         doc,
         ["", ""],
         [
-            ["Version", "1.2"],
-            ["Date", "28 August 2026"],
+            ["Version", "1.3"],
+            ["Date", "8 September 2026"],
             ["Author", "David Ahlhaus"],
             ["Status", "Issued"],
         ],
@@ -349,14 +349,15 @@ def build():
         ["Word", "What it means"],
         [
             ["Branch", "The slice of the firm you are looking at: a person in the centre, their manager above, people at the same level beside them, and the people who report to them below."],
-            ["Card", "The box for one person. It shows their photo, name, role, company, department, and team."],
+            ["Card", "The box for one person. It shows their photo, name, role, company, department, team, and location."],
             ["Company", "The Factor1 business the person belongs to, such as Factor1 Shepp or Taxopia."],
             ["Department", "The area of work, such as Service Delivery or Firm Management."],
             ["Team", "The named group inside a department, such as Zeus or Avengers."],
+            ["Location", "The office or place a person works from, such as Melbourne or Brisbane."],
             ["Role", "The person’s job title."],
             ["Reports to", "The person this person reports to. Microsoft 365 stores this as the manager."],
             ["Full tree", "A zoomable view of everyone, or of the company–department–team–role structure."],
-            ["Admin", "The screens and buttons for people who update company, department, team, role, and Reports to."],
+            ["Admin", "The screens and buttons for people who update company, department, team, location, role, and Reports to."],
         ],
         [2200, 6826],
     )
@@ -367,7 +368,7 @@ def build():
         ["Who", "What they can do"],
         [
             ["Everyone who signs in", "Search, filter, open a branch, and open Full tree."],
-            ["People with Admin", "Everything above, plus edit a person’s company, department, team, role, and Reports to. They can also download a list of everyone and apply an updated list."],
+            ["People with Admin", "Everything above, plus edit a person’s company, department, team, location, role, and Reports to. They can also download a list of everyone and apply an updated list."],
         ],
         [2800, 6226],
     )
@@ -385,12 +386,13 @@ def build():
     heading(doc, "8.1 Search", 2)
     para(doc, "Type a name in Search by name… at the top. A list of matches appears as you type. Choose a name to open that person’s branch.")
     heading(doc, "8.2 Filter", 2)
-    para(doc, "Use the three lists to the right of search:")
+    para(doc, "Use the four lists to the right of search:")
     bullet(doc, [{"text": "All companies", "bold": True}, {"text": " — show one company."}])
     bullet(doc, [{"text": "All departments", "bold": True}, {"text": " — show one department. This list follows the company you picked."}])
     bullet(doc, [{"text": "All teams", "bold": True}, {"text": " — show one team. This list follows the company and department you picked."}])
+    bullet(doc, [{"text": "All locations", "bold": True}, {"text": " — show one location. This list follows the company, department, and team you picked."}])
     para(doc, "Set a list back to All… when you want to see everyone again.")
-    placeholder(doc, "the top bar with Search by name and the company, department, and team lists.")
+    placeholder(doc, "the top bar with Search by name and the company, department, team, and location lists.")
 
     heading(doc, "9. Moving around a branch")
     para(doc, "This is the main way you use Org Explorer.")
@@ -406,7 +408,7 @@ def build():
     numbered(doc, [{"text": "Choose "}, {"text": "Employees", "bold": True}, {"text": " to see people, or "}, {"text": "Structure", "bold": True}, {"text": " to see company, then department, then team, then role."}])
     numbered(doc, "Drag to move around. Scroll to zoom.")
     numbered(doc, [{"text": "Choose "}, {"text": "Focus me", "bold": True}, {"text": " to jump to your own card."}])
-    numbered(doc, [{"text": "Choose "}, {"text": "Print", "bold": True}, {"text": ". The chart prints in landscape, with one branch per page so names stay readable. Each page names the branch. Set company, department, or team first if you only need part of the firm. In the print dialog you can Save as PDF."}])
+    numbered(doc, [{"text": "Choose "}, {"text": "Print", "bold": True}, {"text": ". The chart prints in landscape, with one branch per page so names stay readable. Each page names the branch. Set company, department, team, or location first if you only need part of the firm. In the print dialog you can Save as PDF."}])
     numbered(doc, [{"text": "Choose "}, {"text": "Download SVG", "bold": True}, {"text": " to save the whole chart as a file you can open and zoom."}])
     numbered(doc, [{"text": "Choose "}, {"text": "Back to explorer", "bold": True}, {"text": " to return to the branch view."}])
     placeholder(doc, "Full tree in Employees view, with Focus me, Print, Download SVG, and Back to explorer visible.")
@@ -416,23 +418,24 @@ def build():
 
     heading(doc, "10.3 Update a person’s details", 2)
     para(doc, "This section is for people with Admin.")
-    para(doc, "You can change Reports to, company, department, team, and role. Microsoft 365 stores the change.")
+    para(doc, "You can change Reports to, company, department, team, location, and role. Microsoft 365 stores the change.")
     numbered(doc, [{"text": "Choose "}, {"text": "Admin", "bold": True}, {"text": ", or choose the pencil on a person’s card."}])
     numbered(doc, [{"text": "In Admin, type a name in "}, {"text": "Search people to edit…", "bold": True}, {"text": " and choose "}, {"text": "Edit", "bold": True}, {"text": "."}])
     numbered(doc, [{"text": "Under "}, {"text": "Reports to", "bold": True}, {"text": ", search for a person and choose their name. Use × if this person sits at the top of the org."}])
-    numbered(doc, "Pick a value from each of the company, department, team, and role lists. Use — None — to leave that field blank.")
+    numbered(doc, "Pick a value from each of the company, department, team, location, and role lists. Use — None — to leave that field blank.")
+    numbered(doc, "The location list offers the locations already used by the company, department, and team you picked above it.")
     numbered(doc, [{"text": "To create a value that is not in a list, choose "}, {"text": "Add new value…", "bold": True}, {"text": ", type the name, then choose "}, {"text": "Add", "bold": True}, {"text": "."}])
     numbered(doc, [{"text": "Choose "}, {"text": "Save changes", "bold": True}, {"text": ". The button shows Saving… while Microsoft 365 stores the change and the chart updates. The panel then shows “Saved to Microsoft 365.”"}])
     numbered(doc, [{"text": "Choose "}, {"text": "Cancel", "bold": True}, {"text": " or the × to close the panel and see the branch."}])
-    placeholder(doc, "the Edit details panel with Reports to at the top, the four lists, and Save changes.")
-    para(doc, "A company, department, team, or role stays in the lists while at least one person has it. When the last person moves off a value, that value leaves the lists.")
+    placeholder(doc, "the Edit details panel with Reports to at the top, the five lists, and Save changes.")
+    para(doc, "A company, department, team, location, or role stays in the lists while at least one person has it. When the last person moves off a value, that value leaves the lists.")
     para(doc, "Org Explorer stops a reporting line that would loop, including a person reporting to themselves.")
 
     heading(doc, "10.4 Update many people at once", 2)
     para(doc, "This section is for people with Admin.")
     numbered(doc, [{"text": "In Admin, choose "}, {"text": "Download CSV", "bold": True}, {"text": ". A file called org-users.csv saves to your computer."}])
     numbered(doc, "Open the file in Excel.")
-    numbered(doc, "Change only the company, department, team, and role columns. Leave the id column as it is, so each row still matches the right person.")
+    numbered(doc, "Change only the company, department, team, location, and role columns. Leave the id column as it is, so each row still matches the right person.")
     numbered(doc, "Save the file.")
     numbered(doc, [{"text": "In Admin, choose "}, {"text": "Apply CSV", "bold": True}, {"text": ", pick your file, and confirm."}])
     para(doc, "Wait until the status line at the top reports how many people were updated. If some rows fail, the status line explains why.")
@@ -440,8 +443,8 @@ def build():
     heading(doc, "11. Points to remember")
     bullet(doc, "Sign in with your Factor1 Microsoft account, not a personal Microsoft account.")
     bullet(doc, [{"text": "My profile", "bold": True}, {"text": " always takes you back to your own branch."}])
-    bullet(doc, "Search looks up names. Filters narrow the chart by company, department, and team.")
-    bullet(doc, "People with Admin pick company, department, team, and role from lists. They create a new value with Add new value…, then Add.")
+    bullet(doc, "Search looks up names. Filters narrow the chart by company, department, team, and location.")
+    bullet(doc, "People with Admin pick company, department, team, location, and role from lists. They create a new value with Add new value…, then Add.")
     bullet(doc, [{"text": "Reports to", "bold": True}, {"text": " is a person search. Use × if this person sits at the top of the org."}])
     bullet(doc, "Finish Add, or pick an existing value, before Save changes.")
     bullet(doc, [{"text": "Save changes", "bold": True}, {"text": " shows Saving… while Microsoft 365 stores the change and the chart updates."}])
@@ -460,7 +463,7 @@ def build():
             ["Save changes reports a problem.", "Read the message on the panel. Try again. If it repeats, send the message to Innovation & Systems."],
             ["The panel reports Reports to could not be updated.", "Close the panel, open the person’s branch, and check who sits above them. If the old reporting line is still there, send the on-screen message to Innovation & Systems."],
             ["Apply CSV reports that some people failed.", "Read the status line. Send that text to Innovation & Systems, with the file you applied."],
-            ["A person’s team did not update.", "Tell Innovation & Systems the person’s name. Some mailboxes need a change in Exchange instead."],
+            ["A person’s team or location did not update.", "Tell Innovation & Systems the person’s name. Some mailboxes need a change in Exchange instead."],
             ["A person is missing from the chart.", "Confirm they have an active Factor1 Microsoft account. If they do, tell Innovation & Systems."],
         ],
         [3200, 5826],
@@ -471,12 +474,13 @@ def build():
         doc,
         ["Term", "Meaning"],
         [
-            ["Admin", "The area of Org Explorer used to update company, department, team, role, and Reports to."],
+            ["Admin", "The area of Org Explorer used to update company, department, team, location, role, and Reports to."],
             ["Branch", "The view centred on one person and the people directly around them."],
             ["Card", "The on-screen box for one person."],
             ["Company", "The Factor1 business a person belongs to."],
             ["Department", "The area of work a person belongs to."],
             ["Full tree", "The zoomable view of everyone, or of the structure of the firm."],
+            ["Location", "The office or place a person works from."],
             ["Microsoft 365", "The firm’s directory of people. Org Explorer reads from it and, for Admin, writes back to it."],
             ["Reports to", "The person this person reports to. Microsoft 365 stores this as the manager."],
             ["Role", "A person’s job title."],
@@ -506,6 +510,7 @@ def build():
             ["1.0", "27 August 2026", "David Ahlhaus", "First issue. Covers sign-in, search, filters, branches, Full tree, and Admin updates."],
             ["1.1", "28 August 2026", "David Ahlhaus", "Added Reports to on Edit details, Saving… on Save changes, and Print on Full tree."],
             ["1.2", "28 August 2026", "David Ahlhaus", "Print on Full tree now uses one landscape page per branch. Download SVG saves the whole chart as a file you can zoom."],
+            ["1.3", "8 September 2026", "David Ahlhaus", "Added Location. It shows on each card, has its own filter, appears in Edit details, and is a column in the list you download and apply."],
         ],
         [1400, 1800, 2200, 3626],
     )

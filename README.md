@@ -1,6 +1,6 @@
 # Org Explorer
 
-Microsoft 365 org chart navigator for Factor1. Hierarchy is **Company → Department → Team → Role**. Reporting lines use the Microsoft 365 **manager** (**Reports to** in the edit panel). Team is stored in Exchange **CustomAttribute1** (`onPremisesExtensionAttributes.extensionAttribute1` in Graph). Embeddable in SharePoint via Vercel.
+Microsoft 365 org chart navigator for Factor1. Hierarchy is **Company → Department → Team → Role**. Reporting lines use the Microsoft 365 **manager** (**Reports to** in the edit panel). Team is stored in Exchange **CustomAttribute1** and location in **CustomAttribute2** (`onPremisesExtensionAttributes.extensionAttribute1` and `extensionAttribute2` in Graph). Embeddable in SharePoint via Vercel.
 
 Repo: [Factor1-Accountants-Advisers/org-explorer](https://github.com/Factor1-Accountants-Advisers/org-explorer)
 
@@ -56,9 +56,13 @@ Redirect URIs (SPA):
 3. Copy the group **Object ID** from Entra → Groups → the group → Overview. Names and mail nicknames will not work.
 4. In the Vercel project that owns the live URL, set `ADMIN_GROUP_ID` exactly (case-sensitive) for **Production**, then **Redeploy**. Existing deployments do not receive new variables.
 
-### Team / CustomAttribute1
+### Team / CustomAttribute1 and Location / CustomAttribute2
 
-Graph can write `extensionAttribute1` only for **cloud-only** users (`onPremisesSyncEnabled` is false or null). Hybrid or Exchange-mastered mailboxes return an error in the edit drawer; those must be updated in Exchange. Confirm CustomAttribute1 is unused in the tenant before the first live save.
+Graph can write `extensionAttribute1` (team) and `extensionAttribute2` (location) only for **cloud-only** users (`onPremisesSyncEnabled` is false or null). Hybrid or Exchange-mastered mailboxes return an error in the edit drawer; those must be updated in Exchange. Confirm both CustomAttribute1 and CustomAttribute2 are unused in the tenant before the first live save.
+
+Graph replaces the whole `onPremisesExtensionAttributes` object on write, so `/api/admin` always sends both attributes together. Saving a location cannot blank out a team, and the reverse.
+
+The location list in the filter bar and the edit drawer is scoped: it offers the locations already in use for the company, department, and team currently selected.
 
 ### Reports to / manager
 
@@ -67,7 +71,7 @@ The edit drawer’s **Reports to** field writes the Graph manager:
 - Set: `PUT /users/{id}/manager/$ref` with `@odata.id` pointing at the manager’s user
 - Clear (person sits at the top of the org): `DELETE /users/{id}/manager`
 
-After a successful save the app waits until Graph returns the new manager, then rebuilds the current branch so the chart matches. CSV apply writes company, department, team, and role.
+After a successful save the app waits until Graph returns the new manager, then rebuilds the current branch so the chart matches. CSV apply writes company, department, team, location, and role.
 
 ## Deploy to Vercel
 
