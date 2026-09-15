@@ -144,6 +144,7 @@ let editCloseTimer = null;
 let searchTimer = null;
 let animDirection = null;
 let drawFrame = 0;
+let treeRenderToken = 0;
 const photoCache = new Map();
 const userCache = new Map();
 const directReportCountCache = new Map();
@@ -752,8 +753,136 @@ function orgMatches(user) {
   return true;
 }
 
+function filtersAreActive() {
+  return !!(companyFilter || departmentFilter || teamFilter || locationFilter);
+}
+
+function activeFilterLabel() {
+  return [companyFilter, departmentFilter, teamFilter, locationFilter].filter(Boolean).join(" · ");
+}
+
 function filterByOrg(users) {
   return users.filter(orgMatches);
+}
+
+function peopleByIdMap(people) {
+  const map = new Map();
+  (people || []).forEach((p) => {
+    if (p?.id) map.set(p.id, p);
+  });
+  return map;
+}
+
+function orgChildrenIndex(managerMap) {
+  const children = new Map();
+  (managerMap || new Map()).forEach((managerId, id) => {
+    if (!managerId) return;
+    if (!children.has(managerId)) children.set(managerId, []);
+    children.get(managerId).push(id);
+  });
+  return children;
+}
+
+function walkAncestorIds(id, managerMap) {
+  const chain = [];
+  let cur = id;
+  const seen = new Set();
+  while (cur && !seen.has(cur)) {
+    seen.add(cur);
+    chain.push(cur);
+    cur = managerMap.get(cur) || null;
+  }
+  return chain;
+}
+
+function orgRootIdFor(id, managerMap) {
+  const chain = walkAncestorIds(id, managerMap);
+  return chain[chain.length - 1] || id;
+}
+
+function isInSubtree(personId, ancestorId, managerMap) {
+  if (!personId || !ancestorId) return false;
+  return walkAncestorIds(personId, managerMap).includes(ancestorId);
+}
+
+function subtreeHasMatchingPerson(rootId, peopleById, children) {
+  const stack = [...(children.get(rootId) || [])];
+  while (stack.length) {
+    const id = stack.pop();
+    const person = peopleById.get(id);
+    if (person && orgMatches(person)) return true;
+    const kids = children.get(id);
+    if (kids) stack.push(...kids);
+  }
+  return false;
+}
+
+function countMatchingInSubtree(rootId, peopleById, children) {
+  let n = 0;
+  const stack = [...(children.get(rootId) || [])];
+  while (stack.length) {
+    const id = stack.pop();
+    const person = peopleById.get(id);
+    if (person && orgMatches(person)) n += 1;
+    const kids = children.get(id);
+    if (kids) stack.push(...kids);
+  }
+  return n;
+}
+
+function nearestMatchingDescendants(rootId, peopleById, children) {
+  const matches = [];
+  const stack = [...(children.get(rootId) || [])];
+  while (stack.length) {
+    const id = stack.pop();
+    const person = peopleById.get(id);
+    if (person && orgMatches(person)) {
+      matches.push(person);
+      continue;
+    }
+    const kids = children.get(id);
+    if (kids) stack.push(...kids);
+  }
+  return sortPeople(matches);
+}
+
+function findFilterJumpTarget(currentId) {
+  const people = fullOrgPeople || [];
+  const managerMap = fullOrgManagerMap || new Map();
+  if (!currentId || !people.length) return null;
+
+  const matches = people.filter(orgMatches);
+  if (!matches.length) return { noneInOrg: true };
+
+  if (matches.some((p) => isInSubtree(p.id, currentId, managerMap))) return null;
+
+  const byRoot = new Map();
+  matches.forEach((p) => {
+    const rootId = orgRootIdFor(p.id, managerMap);
+    if (!byRoot.has(rootId)) byRoot.set(rootId, []);
+    byRoot.get(rootId).push(p);
+  });
+
+  let bestRootId = null;
+  let bestList = [];
+  byRoot.forEach((list, rootId) => {
+    if (list.length > bestList.length) {
+      bestList = list;
+      bestRootId = rootId;
+    }
+  });
+
+  const rootPerson = people.find((p) => p.id === bestRootId) || userCache.get(bestRootId);
+  const highest = [...bestList].sort((a, b) => (
+    walkAncestorIds(a.id, managerMap).length - walkAncestorIds(b.id, managerMap).length
+  ))[0];
+  const host = rootPerson || highest;
+  if (!host) return { noneInOrg: true };
+
+  return {
+    targetId: host.id,
+    hostName: host.displayName,
+  };
 }
 
 function departmentsForCompany(company) {
@@ -872,12 +1001,13 @@ function seedDemoOrgFilters() {
   refreshOrgFilters();
 }
 
-async function nodeHtml(user, role, reportCount = 0) {
+async function nodeHtml(user, role, reportCount = 0, hintOverride = null) {
   const photo = await fetchPhotoUrl(user.id);
   const avatar = photo
     ? `<img class="avatar" src="${photo}" alt="" />`
     : `<div class="avatar">${escapeHtml(initials(user))}</div>`;
-  const hintText = role === "manager" ? "↑ Go up"
+  const hintText = hintOverride != null ? hintOverride
+    : role === "manager" ? "↑ Go up"
     : role === "peer" ? "View branch"
     : role === "report" && reportCount > 0
       ? `${reportCount} direct report${reportCount === 1 ? "" : "s"}`
@@ -1031,62 +1161,134 @@ function renderPathSpine() {
 }
 
 async function renderTree() {
+  const token = ++treeRenderToken;
+  const orgLoad = (filtersAreActive() && !fullOrgPeople)
+    ? loadFullOrg().catch(() => null)
+    : null;
+  await paintBranch(token, { loadingOrg: !!orgLoad });
+  if (token !== treeRenderToken) return;
+  if (!orgLoad) return;
+  await orgLoad;
+  if (token !== treeRenderToken) return;
+  animDirection = null;
+  await paintBranch(token, { loadingOrg: false });
+}
+
+async function paintBranch(token, { loadingOrg = false } = {}) {
   const current = branchStack[branchStack.length - 1];
   if (!current) return;
 
   const manager = branchStack.length >= 2
     ? branchStack[branchStack.length - 2]
     : await fetchManager(current.id);
+  if (token !== treeRenderToken) return;
 
   let reports = await fetchDirectReports(current.id);
+  if (token !== treeRenderToken) return;
   reports = filterByOrg(reports);
   reports = sortPeople(reports);
 
   const parts = [];
+  const filterActive = filtersAreActive();
   const showManager = !!(manager?.id && orgMatches(manager));
-  const filterActive = companyFilter || departmentFilter || teamFilter || locationFilter;
   const atOrgTop = !manager;
+  const orgPeople = fullOrgPeople;
+  const managerMap = fullOrgManagerMap;
+  const peopleById = orgPeople ? peopleByIdMap(orgPeople) : null;
+  const children = managerMap ? orgChildrenIndex(managerMap) : null;
+
+  if (filterActive && peopleById && children) {
+    const nearest = nearestMatchingDescendants(current.id, peopleById, children);
+    if (nearest.length) reports = nearest;
+  }
 
   let topPeers = [];
+  let gatewayIds = new Set();
   if (atOrgTop) {
     const roots = await fetchOrgRoots();
-    topPeers = filterByOrg(roots).filter((u) => u.id !== current.id);
-    // Ensure current root is known even if discovery missed them
-    if (!roots.some((u) => u.id === current.id)) {
-      cacheUser(current);
+    if (token !== treeRenderToken) return;
+    if (!roots.some((u) => u.id === current.id)) cacheUser(current);
+    if (filterActive && peopleById && children) {
+      topPeers = roots.filter((u) => {
+        if (u.id === current.id) return false;
+        if (orgMatches(u)) return true;
+        if (subtreeHasMatchingPerson(u.id, peopleById, children)) {
+          gatewayIds.add(u.id);
+          return true;
+        }
+        return false;
+      });
+    } else {
+      topPeers = filterByOrg(roots).filter((u) => u.id !== current.id);
     }
   }
+
+  const jump = (filterActive && orgPeople && !reports.length)
+    ? findFilterJumpTarget(current.id)
+    : null;
+  const lookingAcrossOrg = loadingOrg && filterActive && !orgPeople && !reports.length;
 
   if (showManager) {
     parts.push(`<div class="tree-row manager-row">${await nodeHtml(manager, "manager")}</div>`);
   } else if (manager?.id && filterActive) {
     parts.push('<p class="empty-layer">Manager is outside the selected filters</p>');
   } else if (atOrgTop) {
-    // Keep vertical rhythm consistent with the 3-level layout
     parts.push(`<div class="tree-row manager-row" aria-hidden="true">
       <div class="tree-node manager" style="visibility:hidden;pointer-events:none">
         <div class="node-card"></div>
       </div>
     </div>`);
   }
+  if (token !== treeRenderToken) return;
 
   if (atOrgTop && topPeers.length > 0) {
     const rootPeople = sortPeople([current, ...topPeers]);
     const rootCards = await Promise.all(rootPeople.map(async (u) => {
       if (u.id === current.id) return nodeHtml(u, "current");
-      const count = await countDirectReports(u.id);
+      if (gatewayIds.has(u.id) && peopleById && children) {
+        const n = countMatchingInSubtree(u.id, peopleById, children);
+        const hint = n === 1 ? "Has 1 matching person" : `Has ${n} matching people`;
+        return nodeHtml(u, "peer", n, hint);
+      }
+      const count = children
+        ? (children.get(u.id) || []).length
+        : await countDirectReports(u.id);
       return nodeHtml(u, "peer", count);
     }));
+    if (token !== treeRenderToken) return;
     parts.push(`<div class="tree-row current-row">${rootCards.join("")}</div>`);
   } else {
     parts.push(`<div class="tree-row current-row">${await nodeHtml(current, "current")}</div>`);
   }
+  if (token !== treeRenderToken) return;
 
   if (reports.length > 0) {
-    const counts = await Promise.all(reports.map((r) => countDirectReports(r.id)));
-    parts.push(`<div class="reports-slot"><div class="reports-scroll"><div class="tree-row reports-row">${(await Promise.all(
-      reports.map((r, i) => nodeHtml(r, "report", counts[i]))
-    )).join("")}</div></div></div>`);
+    const reportCards = await Promise.all(reports.map(async (r) => {
+      const isDirect = !managerMap || (managerMap.get(r.id) || null) === current.id;
+      const count = children
+        ? (children.get(r.id) || []).length
+        : await countDirectReports(r.id);
+      const hint = !isDirect && filterActive ? "In this branch" : null;
+      return nodeHtml(r, "report", count, hint);
+    }));
+    if (token !== treeRenderToken) return;
+    parts.push(`<div class="reports-slot"><div class="reports-scroll"><div class="tree-row reports-row">${
+      reportCards.join("")
+    }</div></div></div>`);
+  } else if (lookingAcrossOrg) {
+    parts.push('<div class="reports-slot"><p class="empty-layer">Looking for matching people in other branches…</p></div>');
+  } else if (jump?.noneInOrg) {
+    parts.push('<div class="reports-slot"><p class="empty-layer">No people match the current filters</p></div>');
+  } else if (jump?.targetId) {
+    const label = escapeHtml(activeFilterLabel() || "That filter");
+    const host = escapeHtml(jump.hostName);
+    parts.push(`<div class="reports-slot"><div class="empty-layer has-actions">
+      <p>${label} is not in this branch. It sits under ${host}.</p>
+      <div class="empty-layer-actions">
+        <button type="button" class="primary" data-filter-jump="${jump.targetId}">Jump there</button>
+        <button type="button" data-open-full-tree>Open full tree</button>
+      </div>
+    </div></div>`);
   } else {
     parts.push(`<div class="reports-slot"><p class="empty-layer">No direct reports${
       filterActive ? " matching filters" : ""
@@ -1118,8 +1320,12 @@ async function renderTree() {
       const id = btn.dataset.navId;
       const role = btn.dataset.navRole;
       if (role === "manager") navigateUp(id);
-      else if (role === "report") navigateDown(id);
-      else if (role === "peer") navigateToPeerRoot(id);
+      else if (role === "report") {
+        const mid = fullOrgManagerMap?.get(id);
+        const currentId = branchStack[branchStack.length - 1]?.id;
+        if (mid && currentId && mid !== currentId) navigateToPerson(id);
+        else navigateDown(id);
+      } else if (role === "peer") navigateToPeerRoot(id);
     });
   });
 
@@ -1130,6 +1336,15 @@ async function renderTree() {
       openEditDrawer(btn.dataset.editId);
     });
   });
+
+  const jumpBtn = els.treeInner.querySelector("[data-filter-jump]");
+  if (jumpBtn) {
+    jumpBtn.addEventListener("click", () => navigateToPerson(jumpBtn.dataset.filterJump));
+  }
+  const fullTreeBtn = els.treeInner.querySelector("[data-open-full-tree]");
+  if (fullTreeBtn) {
+    fullTreeBtn.addEventListener("click", () => openFullTree());
+  }
 
   renderPathSpine();
   refreshOrgFilters();
@@ -1295,7 +1510,7 @@ async function loadFullOrg() {
       await Promise.all(batch.map(async ({ user, depth }) => {
         if (depth >= 15) return;
         processed += 1;
-        if (processed % 8 === 0) {
+        if (processed % 8 === 0 && !els.fullTreeUi.classList.contains("hidden")) {
           setFullTreeLoading(true, `Loading org… (${byId.size} people)`);
         }
         try {

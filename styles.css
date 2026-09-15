@@ -571,6 +571,26 @@ img.avatar {
   margin: 0 auto;
 }
 
+.empty-layer.has-actions {
+  max-width: 22rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  align-items: center;
+}
+
+.empty-layer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  justify-content: center;
+}
+
+.empty-layer-actions button {
+  font-size: 0.8rem;
+  padding: 0.4rem 0.85rem;
+}
+
 .status {
   padding: 2rem 1rem;
   text-align: center;
