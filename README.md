@@ -73,6 +73,22 @@ The edit drawer’s **Reports to** field writes the Graph manager:
 
 After a successful save the app waits until Graph returns the new manager, then rebuilds the current branch so the chart matches. CSV apply writes company, department, team, location, and role.
 
+## Agent view (`/agent`)
+
+`https://org-explorer-ruby.vercel.app/agent` returns the whole org chart as Markdown, so AI agents can read every active person in one fetch: a reporting tree, then every person A–Z with role, company, department, team, location, email, manager, and direct reports. Add `format=json` for structured output. Guests and disabled accounts are left out, the same as the explorer.
+
+The server reads the directory with the app token (`User.ReadWrite.All` covers reads), so no sign-in is needed. The page is locked by `AGENT_ACCESS_KEY` instead. Pass it as a query string or a header:
+
+```bash
+curl "https://org-explorer-ruby.vercel.app/agent?key=<AGENT_ACCESS_KEY>"
+```
+
+```bash
+curl -H "Authorization: Bearer <AGENT_ACCESS_KEY>" https://org-explorer-ruby.vercel.app/agent
+```
+
+If `AGENT_ACCESS_KEY` is not set, `/agent` returns 503 and shows no data. Rotate the key by changing the variable and redeploying.
+
 ## Deploy to Vercel
 
 1. Import `Factor1-Accountants-Advisers/org-explorer` (framework **Other**, root of the repo).
@@ -84,6 +100,7 @@ After a successful save the app waits until Graph returns the new manager, then 
 | `ENTRA_CLIENT_SECRET` | App registration client secret |
 | `ENTRA_TENANT_ID` | `factor1.com.au` or the tenant GUID |
 | `ADMIN_GROUP_ID` | Org Explorer Admins object ID |
+| `AGENT_ACCESS_KEY` | Long random string that unlocks `/agent` (see below) |
 
 3. Deploy, then add the Vercel origin as an SPA redirect URI in Entra ID.
 4. Grant admin consent for the application permissions if you have not already.
