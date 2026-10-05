@@ -10,7 +10,7 @@ export function env(name) {
   return found ? process.env[found] : "";
 }
 
-export async function getAppToken() {
+export async function getAppToken(scope = "https://graph.microsoft.com/.default") {
   const tenant = env("ENTRA_TENANT_ID");
   const clientId = env("ENTRA_CLIENT_ID");
   const clientSecret = env("ENTRA_CLIENT_SECRET");
@@ -22,7 +22,7 @@ export async function getAppToken() {
     client_id: clientId,
     client_secret: clientSecret,
     grant_type: "client_credentials",
-    scope: "https://graph.microsoft.com/.default",
+    scope,
   });
 
   const res = await fetch(

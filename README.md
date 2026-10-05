@@ -89,6 +89,29 @@ curl -H "Authorization: Bearer <AGENT_ACCESS_KEY>" https://org-explorer-ruby.ver
 
 If `AGENT_ACCESS_KEY` is not set, `/agent` returns 503 and shows no data. Rotate the key by changing the variable and redeploying.
 
+## Nightly backup to Azure Blob Storage
+
+A Vercel cron calls `/api/backup` every night at 16:00 UTC (2am AEST, 3am AEDT). It saves the same data as `/agent?format=json` to the `hr-user-data` container in the `stf1cwm` storage account (`rg-cwm-prod`) for reporting:
+
+- `org-chart/YYYY/MM/DD/org-chart.json`: the full snapshot, with manager and direct report IDs
+- `org-chart/YYYY/MM/DD/org-chart.csv`: one row per person, with a `snapshotDate` column so days can be stacked
+
+The date is Melbourne time. Running it again on the same day overwrites that day's files. Set `BACKUP_STORAGE_ACCOUNT` or `BACKUP_CONTAINER` to write somewhere else.
+
+The backup writes as the Org Explorer app (same client secret, no SAS token), so its service principal needs **Storage Blob Data Contributor** on the container:
+
+```bash
+az role assignment create --assignee 3cc7e474-6af5-4f3e-8c5f-607c5cfc11b8 --role "Storage Blob Data Contributor" --scope /subscriptions/57a3f51b-c3f8-44e8-9e5a-f9fe29e679f2/resourceGroups/rg-cwm-prod/providers/Microsoft.Storage/storageAccounts/stf1cwm/blobServices/default/containers/hr-user-data
+```
+
+`/api/backup` only runs when called with `Authorization: Bearer <CRON_SECRET>`, which Vercel adds to cron calls. Without `CRON_SECRET` it returns 503. To run a backup by hand:
+
+```bash
+curl -H "Authorization: Bearer <CRON_SECRET>" https://org-explorer-ruby.vercel.app/api/backup
+```
+
+Cron runs and failures show under the project's **Settings → Cron Jobs** and in the function logs.
+
 ## Deploy to Vercel
 
 1. Import `Factor1-Accountants-Advisers/org-explorer` (framework **Other**, root of the repo).
@@ -101,6 +124,7 @@ If `AGENT_ACCESS_KEY` is not set, `/agent` returns 503 and shows no data. Rotate
 | `ENTRA_TENANT_ID` | `factor1.com.au` or the tenant GUID |
 | `ADMIN_GROUP_ID` | Org Explorer Admins object ID |
 | `AGENT_ACCESS_KEY` | Long random string that unlocks `/agent` (see below) |
+| `CRON_SECRET` | Long random string; Vercel sends it to the nightly backup (see below) |
 
 3. Deploy, then add the Vercel origin as an SPA redirect URI in Entra ID.
 4. Grant admin consent for the application permissions if you have not already.
