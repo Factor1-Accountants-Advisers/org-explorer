@@ -2526,19 +2526,53 @@ function csvEscape(value) {
   return text;
 }
 
-function orgUsersCsv(people) {
-  const header = ["id", "displayName", "userPrincipalName", "mail", "companyName", "department", "team", "location", "jobTitle"];
-  const rows = people.map((u) => [
-    u.id,
-    u.displayName,
-    u.userPrincipalName,
-    u.mail,
-    u.companyName,
-    u.department,
-    userTeam(u),
-    userLocation(u),
-    u.jobTitle,
-  ].map(csvEscape).join(","));
+// Current manager for everyone, keyed by user id. Managers outside the directory list
+// (disabled, guests) are still returned so a round-tripped CSV does not clear them.
+async function fetchManagerMap() {
+  const managers = new Map();
+  if (demoMode) {
+    Object.values(DEMO_USERS).forEach((raw) => {
+      const mgr = raw.managerId ? DEMO_USERS[raw.managerId] : null;
+      managers.set(raw.id, mgr ? stripInternal(mgr) : null);
+    });
+    return managers;
+  }
+
+  const select = "id,displayName,userPrincipalName,mail";
+  let path = `/users?$select=id&$expand=manager($select=${select})&$top=999`;
+  while (path) {
+    const data = await graphGet(path);
+    (data?.value || []).forEach((u) => {
+      if (u.id) managers.set(u.id, u.manager?.id ? u.manager : null);
+    });
+    const next = data?.["@odata.nextLink"] || "";
+    if (!next) break;
+    path = next.startsWith(CONFIG.graphBase) ? next.slice(CONFIG.graphBase.length) : new URL(next).pathname + new URL(next).search;
+  }
+  return managers;
+}
+
+function orgUsersCsv(people, managers) {
+  const header = [
+    "id", "displayName", "userPrincipalName", "mail", "companyName", "department", "team", "location", "jobTitle",
+    "reportsToEmail", "reportsToName",
+  ];
+  const rows = people.map((u) => {
+    const mgr = managers.get(u.id) || null;
+    return [
+      u.id,
+      u.displayName,
+      u.userPrincipalName,
+      u.mail,
+      u.companyName,
+      u.department,
+      userTeam(u),
+      userLocation(u),
+      u.jobTitle,
+      mgr ? mgr.userPrincipalName || mgr.mail || mgr.id : "",
+      mgr?.displayName || "",
+    ].map(csvEscape).join(",");
+  });
   return [header.join(","), ...rows].join("\r\n");
 }
 
@@ -2549,7 +2583,7 @@ async function downloadOrgCsv() {
   try {
     await fetchDirectoryPeople();
     const people = adminPeople();
-    const csv = orgUsersCsv(people);
+    const csv = orgUsersCsv(people, await fetchManagerMap());
     const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -2620,14 +2654,106 @@ function updatesFromCsv(text) {
   if (companyCol < 0 || deptCol < 0 || teamCol < 0 || locationCol < 0 || titleCol < 0) {
     throw new Error("CSV must include companyName, department, team, location, and jobTitle columns.");
   }
+  // Reports to is optional: without either column, managers are left alone.
+  const reportsEmailCol = col("reportsToEmail");
+  const reportsNameCol = col("reportsToName");
+  const hasReportsTo = reportsEmailCol >= 0 || reportsNameCol >= 0;
+  const cell = (row, index) => (index >= 0 ? (row[index] || "").trim() : "");
   return rows.slice(1).map((row) => ({
-    userId: (row[idCol] || "").trim(),
-    companyName: companyCol >= 0 ? (row[companyCol] || "").trim() : "",
-    department: deptCol >= 0 ? (row[deptCol] || "").trim() : "",
-    team: teamCol >= 0 ? (row[teamCol] || "").trim() : "",
-    location: locationCol >= 0 ? (row[locationCol] || "").trim() : "",
-    jobTitle: titleCol >= 0 ? (row[titleCol] || "").trim() : "",
+    userId: cell(row, idCol),
+    companyName: cell(row, companyCol),
+    department: cell(row, deptCol),
+    team: cell(row, teamCol),
+    location: cell(row, locationCol),
+    jobTitle: cell(row, titleCol),
+    ...(hasReportsTo ? {
+      reportsTo: { email: cell(row, reportsEmailCol), name: cell(row, reportsNameCol) },
+    } : {}),
   })).filter((item) => item.userId);
+}
+
+// Turns reportsToEmail / reportsToName into managerId, only for people whose manager changes.
+// Email (or UPN, or id) wins; a name alone must match exactly one person; both blank means
+// top of the org. Returns errors instead of writing anything if a row cannot be resolved.
+function resolveCsvManagers(rows, people, managers) {
+  const lower = (value) => String(value || "").trim().toLowerCase();
+  const byKey = new Map();
+  const byName = new Map();
+  const index = (u) => {
+    if (!u?.id) return;
+    [u.id, u.userPrincipalName, u.mail].forEach((key) => { if (key) byKey.set(lower(key), u); });
+  };
+  people.forEach((u) => {
+    index(u);
+    const name = lower(u.displayName);
+    if (!name) return;
+    if (!byName.has(name)) byName.set(name, []);
+    byName.get(name).push(u);
+  });
+  managers.forEach((mgr) => { if (mgr && !byKey.has(lower(mgr.id))) index(mgr); });
+
+  const nameOf = (id) => byKey.get(lower(id))?.displayName || id;
+  const matches = (u, value) => !!u && [u.id, u.userPrincipalName, u.mail].some((key) => key && lower(key) === lower(value));
+  const errors = [];
+  const finalManager = new Map();
+  managers.forEach((mgr, id) => finalManager.set(id, mgr?.id || null));
+
+  const updates = rows.map(({ reportsTo, ...update }) => {
+    if (!reportsTo) return update;
+    const who = nameOf(update.userId);
+    const current = managers.get(update.userId) || null;
+    let target = null;
+
+    if (reportsTo.email) {
+      target = matches(current, reportsTo.email) ? current : byKey.get(lower(reportsTo.email)) || null;
+      if (!target) {
+        errors.push(`${who}: no one with reportsToEmail "${reportsTo.email}".`);
+        return update;
+      }
+      if (reportsTo.name && lower(reportsTo.name) !== lower(target.displayName)) {
+        errors.push(`${who}: reportsToEmail is ${target.displayName} but reportsToName says "${reportsTo.name}".`);
+        return update;
+      }
+    } else if (reportsTo.name) {
+      const found = current && lower(current.displayName) === lower(reportsTo.name)
+        ? [current]
+        : byName.get(lower(reportsTo.name)) || [];
+      if (found.length !== 1) {
+        errors.push(found.length
+          ? `${who}: more than one person is called "${reportsTo.name}". Add their reportsToEmail.`
+          : `${who}: no one called "${reportsTo.name}".`);
+        return update;
+      }
+      [target] = found;
+    }
+
+    if (target && target.id === update.userId) {
+      errors.push(`${who}: cannot report to themselves.`);
+      return update;
+    }
+    const targetId = target?.id || null;
+    if (targetId === (current?.id || null)) return update;
+    finalManager.set(update.userId, targetId);
+    return { ...update, managerId: targetId || "" };
+  });
+
+  // Reject changes that would make someone their own manager further up the chain.
+  updates.forEach((update) => {
+    if (typeof update.managerId !== "string") return;
+    const seen = new Set([update.userId]);
+    let id = finalManager.get(update.userId);
+    while (id) {
+      if (id === update.userId) {
+        errors.push(`${nameOf(update.userId)}: reporting to ${nameOf(update.managerId)} would create a reporting loop.`);
+        break;
+      }
+      if (seen.has(id)) break;
+      seen.add(id);
+      id = finalManager.get(id) || null;
+    }
+  });
+
+  return { updates, errors, managerChanges: updates.filter((u) => typeof u.managerId === "string").length };
 }
 
 async function postAdminUpdates(updates) {
@@ -2640,6 +2766,7 @@ async function postAdminUpdates(updates) {
         raw.team = item.team;
         raw.location = item.location;
         raw.jobTitle = item.jobTitle;
+        if (typeof item.managerId === "string") raw.managerId = item.managerId || null;
       }
       applyUserPatch(item.userId, item);
       return { userId: item.userId, ok: true, ...item };
@@ -2661,7 +2788,7 @@ async function postAdminUpdates(updates) {
   return data.results || [];
 }
 
-async function applyCsvUpdates(updates) {
+async function applyCsvUpdates(updates, managerChanges) {
   const results = [];
   for (let i = 0; i < updates.length; i += 10) {
     const chunk = updates.slice(i, i + 10);
@@ -2673,6 +2800,7 @@ async function applyCsvUpdates(updates) {
     results.push(...chunkResults);
   }
   directoryPeople = null;
+  if (managerChanges) invalidateChartCaches();
   try {
     await fetchDirectoryPeople();
   } catch { /* keep patched cache */ }
@@ -2691,15 +2819,32 @@ async function onAdminCsvChosen(e) {
   const previous = els.btnAdminCsvApply.textContent;
   els.btnAdminCsvApply.disabled = true;
   try {
-    const updates = updatesFromCsv(await file.text());
-    if (!updates.length) throw new Error("No people found in that CSV.");
+    const rows = updatesFromCsv(await file.text());
+    if (!rows.length) throw new Error("No people found in that CSV.");
+    const hasReportsTo = rows.some((row) => row.reportsTo);
+    let updates = rows;
+    let managerChanges = 0;
+    if (hasReportsTo) {
+      els.btnAdminCsvApply.textContent = "Checking Reports to…";
+      await fetchDirectoryPeople();
+      const resolved = resolveCsvManagers(rows, adminPeople(), await fetchManagerMap());
+      if (resolved.errors.length) {
+        console.warn("CSV Reports to problems", resolved.errors);
+        const more = resolved.errors.length > 3 ? ` (+${resolved.errors.length - 3} more, see console)` : "";
+        throw new Error(`Nothing was changed. Fix Reports to in the CSV: ${resolved.errors.slice(0, 3).join(" ")}${more}`);
+      }
+      ({ updates, managerChanges } = resolved);
+    }
+    const fields = hasReportsTo ? "company, department, team, location, role, and Reports to" : "company, department, team, location, and role";
+    const managerNote = hasReportsTo ? ` ${managerChanges} ${managerChanges === 1 ? "person changes" : "people change"} who they report to.` : "";
     const ok = window.confirm(demoMode
-      ? `Apply company, department, team, location, and role for ${updates.length} people in this preview session?`
-      : `Write company, department, team, location, and role for ${updates.length} people to Microsoft 365?`);
+      ? `Apply ${fields} for ${updates.length} people in this preview session?${managerNote}`
+      : `Write ${fields} for ${updates.length} people to Microsoft 365?${managerNote}`);
     if (!ok) return;
-    const results = await applyCsvUpdates(updates);
+    const results = await applyCsvUpdates(updates, managerChanges);
     const failed = results.filter((item) => !item.ok);
     const teamIssues = results.filter((item) => item.ok && (item.teamError || item.locationError));
+    const managerIssues = results.filter((item) => item.ok && item.managerError);
     if (failed.length) {
       const reasons = [...new Set(failed.map((item) => item.error).filter(Boolean))].slice(0, 2);
       setStatus(
@@ -2707,6 +2852,10 @@ async function onAdminCsvChosen(e) {
         true
       );
       console.warn("CSV apply failures", failed.slice(0, 10));
+    } else if (managerIssues.length) {
+      const reasons = [...new Set(managerIssues.map((item) => item.managerError))].slice(0, 2);
+      setStatus(`Updated ${results.length} people, but Reports to failed for ${managerIssues.length}. ${reasons.join(" | ")}`, true);
+      console.warn("CSV Reports to failures", managerIssues.slice(0, 10));
     } else if (teamIssues.length) {
       setStatus(`Updated ${results.length} people. Team and location (CustomAttribute1/2) failed for ${teamIssues.length} hybrid/Exchange-mastered mailboxes.`);
     } else {

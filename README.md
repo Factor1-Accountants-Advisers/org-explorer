@@ -71,7 +71,19 @@ The edit drawer’s **Reports to** field writes the Graph manager:
 - Set: `PUT /users/{id}/manager/$ref` with `@odata.id` pointing at the manager’s user
 - Clear (person sits at the top of the org): `DELETE /users/{id}/manager`
 
-After a successful save the app waits until Graph returns the new manager, then rebuilds the current branch so the chart matches. CSV apply writes company, department, team, location, and role.
+After a successful save the app waits until Graph returns the new manager, then rebuilds the current branch so the chart matches.
+
+### CSV export and apply
+
+**Download CSV** includes `reportsToEmail` (the manager's UPN) and `reportsToName`. **Apply CSV** writes company, department, team, location, and role, plus Reports to:
+
+- Change `reportsToEmail` to move someone. An email, UPN, or user id all work.
+- If `reportsToEmail` is blank, `reportsToName` is used, but only if exactly one person has that name.
+- Both blank puts the person at the top of the org (clears their manager).
+- If both are filled in and point at different people, that row is rejected.
+- Only people whose manager actually changes get a manager write.
+- Every row is checked first. An unknown manager, a duplicate name, someone reporting to themselves, or a change that would create a reporting loop stops the whole apply and nothing is written.
+- A CSV without the two Reports to columns (for example an older export) leaves managers alone.
 
 ## Agent view (`/agent`)
 
